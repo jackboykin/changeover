@@ -7,18 +7,6 @@ function isTwitchHostname(hostname: string): boolean {
   return hostname === 'twitch.tv' || hostname.endsWith('.twitch.tv');
 }
 
-function getWorkerHostname(resolvedUrl: URL): string {
-  if (resolvedUrl.protocol !== 'blob:') return resolvedUrl.hostname;
-
-  const origin = resolvedUrl.origin;
-  if (origin && origin !== 'null') {
-    try {
-      return new URL(origin).hostname;
-    } catch {}
-  }
-  return '';
-}
-
 function tryInlineBlobWorkerSource(workerUrl: string, injectionCode: string): string | null {
   try {
     const xhr = new XMLHttpRequest();
@@ -41,7 +29,8 @@ export function installWorkerHook(processor: M3U8Processor): void {
       try {
         const resolved = new URL(workerUrl, window.location.href);
         workerUrl = resolved.href;
-        host = getWorkerHostname(resolved);
+        // A blob: URL carries its creator's origin. An opaque one, 'null', throws here.
+        host = new URL(resolved.origin).hostname;
       } catch {}
       const isTwitch = isTwitchHostname(host);
 
