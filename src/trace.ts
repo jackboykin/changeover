@@ -6,72 +6,7 @@ interface TraceEntry {
   t: number;
   cat: string;
   ev: string;
-  data?: Record<string, unknown>;
-}
-
-// Split by volume, so ~2s polls can't evict the rare events.
-const HIGH_VOLUME_CATS = new Set(['poll', 'sample']);
-const RING_MAX = 700;
-const STICKY_MAX = 300;
-const BODIES_MAX = 12;
-const BREAKS_LS_KEY = 'tab-trace-breaks';
-const BREAKS_MAX = 50;
-const CONSOLE_LS_KEY = 'tab-trace-console';
-
-const startedAt = Date.now();
-let seq = 0;
-
-interface Ring {
-  max: number;
-  entries: TraceEntry[];
-  start: number;
-}
-
-let ring: Ring = { max: RING_MAX, entries: [], start: 0 };
-let sticky: Ring = { max: STICKY_MAX, entries: [], start: 0 };
-
-function push(r: Ring, entry: TraceEntry): void {
-  if (r.entries.length < r.max) {
-    r.entries.push(entry);
-  } else {
-    r.entries[r.start] = entry;
-    r.start = (r.start + 1) % r.max;
-  }
-}
-
-function entriesOf(r: Ring): TraceEntry[] {
-  return r.start === 0 ? [...r.entries] : [...r.entries.slice(r.start), ...r.entries.slice(0, r.start)];
-}
-
-function readFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === '1';
-  } catch {
-    return false;
-  }
-}
-
-let consoleMirror = readFlag(CONSOLE_LS_KEY);
-
-export function trace(cat: string, ev: string, data?: Record<string, unknown>): void {
-  const entry: TraceEntry = { seq: seq++, t: Date.now(), cat, ev };
-  if (data !== undefined) entry.data = data;
-
-  push(HIGH_VOLUME_CATS.has(cat) ? ring : sticky, entry);
-
-  if (consoleMirror) {
-    console.debug(`[tab ${entry.seq}] ${cat}:${ev}`, data ?? '');
-  }
-}
-
-export function traceEntries(): TraceEntry[] {
-  return [...entriesOf(ring), ...entriesOf(sticky)].sort((a, b) => a.seq - b.seq);
-}
-
-export function clearTrace(): void {
-  ring = { max: RING_MAX, entries: [], start: 0 };
-  sticky = { max: STICKY_MAX, entries: [], start: 0 };
-  bodies = [];
+  data?: Record<string, unknown> | undefined;
 }
 
 interface BodyCapture {
@@ -82,11 +17,44 @@ interface BodyCapture {
   body: string;
 }
 
-let bodies: BodyCapture[] = [];
+// Split by volume, so ~2s polls can't evict the rare events.
+const HIGH_VOLUME_CATS = new Set(['poll', 'sample']);
+const FREQUENT_MAX = 700;
+const RARE_MAX = 300;
+const BODIES_MAX = 12;
+const BREAKS_LS_KEY = 'tab-trace-breaks';
+const BREAKS_MAX = 50;
+
+const startedAt = Date.now();
+let seq = 0;
+const frequent: TraceEntry[] = [];
+const rare: TraceEntry[] = [];
+const bodies: BodyCapture[] = [];
+const breaks = readStoredBreaks();
+
+function pushCapped<T>(list: T[], item: T, max: number): void {
+  list.push(item);
+  if (list.length > max) list.shift();
+}
+
+export function trace(cat: string, ev: string, data?: Record<string, unknown>): void {
+  const entry = { seq: seq++, t: Date.now(), cat, ev, data };
+  if (HIGH_VOLUME_CATS.has(cat)) pushCapped(frequent, entry, FREQUENT_MAX);
+  else pushCapped(rare, entry, RARE_MAX);
+}
+
+export function traceEntries(): TraceEntry[] {
+  return [...frequent, ...rare].sort((a, b) => a.seq - b.seq);
+}
+
+export function clearTrace(): void {
+  frequent.length = 0;
+  rare.length = 0;
+  bodies.length = 0;
+}
 
 export function captureBody(kind: string, url: string, body: string): void {
-  bodies.push({ seq: seq++, t: Date.now(), kind, url, body });
-  if (bodies.length > BODIES_MAX) bodies.shift();
+  pushCapped(bodies, { seq: seq++, t: Date.now(), kind, url, body }, BODIES_MAX);
 }
 
 export function digestPlaylist(text: string) {
@@ -126,19 +94,15 @@ export function digestPlaylist(text: string) {
 
 function readStoredBreaks(): Record<string, unknown>[] {
   try {
-    const raw = localStorage.getItem(BREAKS_LS_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    const parsed: unknown = JSON.parse(localStorage.getItem(BREAKS_LS_KEY) ?? '[]');
     return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
   } catch {
     return [];
   }
 }
 
-let breaks = readStoredBreaks();
-
 export function recordBreakSummary(summary: Record<string, unknown>): void {
-  breaks.push(summary);
-  if (breaks.length > BREAKS_MAX) breaks = breaks.slice(-BREAKS_MAX);
+  pushCapped(breaks, summary, BREAKS_MAX);
   try {
     localStorage.setItem(BREAKS_LS_KEY, JSON.stringify(breaks));
   } catch {}
@@ -146,20 +110,19 @@ export function recordBreakSummary(summary: Record<string, unknown>): void {
 
 export type TraceDump = ReturnType<typeof dumpTrace>;
 
-export function dumpTrace() {
+function dumpTrace() {
   return {
     scriptVersion: version,
     ua: navigator.userAgent,
     startedAt,
     dumpedAt: Date.now(),
-    breaks: [...breaks],
+    breaks,
     events: traceEntries(),
-    bodies: [...bodies],
+    bodies,
   };
 }
 
 function downloadTrace(): void {
-  if (typeof document === 'undefined') return;
   const blob = new Blob([JSON.stringify(dumpTrace())], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -167,42 +130,17 @@ function downloadTrace(): void {
   a.download = `tab-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  trace('trace', 'downloaded', {
-    events: ring.entries.length + sticky.entries.length,
-    breaks: breaks.length,
-  });
-}
-
-function setFlag(key: string, on: boolean): void {
-  try {
-    if (on) localStorage.setItem(key, '1');
-    else localStorage.removeItem(key);
-  } catch {}
 }
 
 export function installTraceExport(): void {
-  if (typeof window === 'undefined') return;
-
-  (window as unknown as Record<string, unknown>)['__tabTrace'] = {
-    dump: dumpTrace,
-    download: downloadTrace,
-    clear: clearTrace,
-    setConsole: (on: boolean) => {
-      consoleMirror = on;
-      setFlag(CONSOLE_LS_KEY, on);
-    },
-  };
-
   document.addEventListener(
     'keydown',
-    (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+    (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toUpperCase() === 'L') {
         e.preventDefault();
         downloadTrace();
       }
     },
     true,
   );
-
-  trace('trace', 'installed', { version, consoleMirror });
 }

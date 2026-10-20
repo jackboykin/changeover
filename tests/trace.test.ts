@@ -17,7 +17,7 @@ describe('trace ring buffer', () => {
   });
 
   it('evicts oldest-first once full and keeps order across the wrap', () => {
-    const MAX = 700; // RING_MAX in src/trace.ts
+    const MAX = 700; // FREQUENT_MAX in src/trace.ts
     for (let i = 0; i < MAX + 5; i++) trace('poll', 'decision', { i });
     const entries = traceEntries();
     expect(entries).toHaveLength(MAX);
