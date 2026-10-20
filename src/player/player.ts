@@ -1,4 +1,4 @@
-import type { IVSPlayer, IVSQuality, QualitySnapshot } from '../types';
+import type { IVSPlayer, QualitySnapshot } from '../types';
 import { videoCodec } from '../hls/m3u8-parser';
 import { trace } from '../trace';
 import { channelFromUsherUrl } from '../utils/url';
@@ -10,36 +10,24 @@ type FiberNode = {
   sibling?: FiberNode | null;
 };
 
-function getVideo(): HTMLVideoElement | null {
-  return typeof document !== 'undefined' ? document.querySelector('video') : null;
-}
-
 function getFiber(el: Element): FiberNode | null {
   const key = Object.keys(el).find((k) => k.startsWith('__reactFiber'));
   return key ? (el as unknown as Record<string, FiberNode>)[key]! : null;
 }
 
-function isIVSPlayer(obj: unknown): obj is IVSPlayer {
-  const o = obj as Record<string, unknown> | null;
-  return !!o && typeof o === 'object' && typeof o.load === 'function' && typeof o.getPath === 'function';
-}
-
 function ivsFromFiber(fiber: FiberNode): IVSPlayer | null {
-  const fromProps = (fiber.memoizedProps as { mediaPlayerInstance?: unknown } | null)?.mediaPlayerInstance;
-  return isIVSPlayer(fromProps) ? fromProps : null;
+  const props = fiber.memoizedProps as { mediaPlayerInstance?: Partial<IVSPlayer> } | null;
+  const ivs = props?.mediaPlayerInstance;
+  return typeof ivs?.load === 'function' && typeof ivs.getPath === 'function' ? (ivs as IVSPlayer) : null;
 }
 
-export function findIVSPlayer(): IVSPlayer | null {
-  const video = getVideo();
+function findIVSPlayer(): IVSPlayer | null {
+  const video = document.querySelector('video');
   if (!video) return null;
 
   let seed: FiberNode | null = null;
-  for (let el: Element | null = video, i = 0; el && i < 40; el = el.parentElement, i++) {
-    const fiber = getFiber(el);
-    if (fiber) {
-      seed = fiber;
-      break;
-    }
+  for (let el: Element | null = video, i = 0; el && !seed && i < 40; el = el.parentElement, i++) {
+    seed = getFiber(el);
   }
   if (!seed) return null;
 
@@ -79,7 +67,7 @@ export function switchRendition(target: {
       });
       return null;
     }
-    const snapshot = { prev: ivs.getQuality?.() ?? null, wasAuto: ivs.isAutoQualityMode?.() ?? null };
+    const snapshot = snapshotQuality(ivs);
     ivs.setQuality(to);
     trace('player', 'rendition-switch', { action: 'switched', from: snapshot.prev?.name, to: to.name });
     return snapshot;
@@ -108,6 +96,14 @@ const FLUSH_VERIFY_POLL_MS = 500;
 const FLUSH_DEADLINE_MS = 12_000; // a warm flush is ready in ~4s, a cold one in ~7.2s
 const FLUSH_READY_RS = 3; // HAVE_FUTURE_DATA
 
+function snapshotQuality(ivs: IVSPlayer): QualitySnapshot {
+  try {
+    return { prev: ivs.getQuality?.() ?? null, wasAuto: ivs.isAutoQualityMode?.() ?? null };
+  } catch {
+    return { prev: null, wasAuto: null };
+  }
+}
+
 // load() re-picks quality from scratch, so the viewer's choice is handed back.
 function restoreQuality(ivs: IVSPlayer, { prev, wasAuto }: QualitySnapshot): void {
   if (wasAuto === true) {
@@ -129,7 +125,7 @@ function restoreQuality(ivs: IVSPlayer, { prev, wasAuto }: QualitySnapshot): voi
 
 function verifyFlush(ivs: IVSPlayer, attempt: number, snapshot: QualitySnapshot, tries = 1): void {
   setTimeout(() => {
-    const video = getVideo();
+    const video = document.querySelector('video');
     const rs = video?.readyState ?? -1;
     const state = {
       attempt,
@@ -167,18 +163,10 @@ async function mintFor(channel: string | null): Promise<string | null> {
 export async function hardFlush(attempt = 0, snapshot?: QualitySnapshot): Promise<boolean> {
   const ivs = findIVSPlayer();
   if (!ivs) {
-    trace('player', 'reload', { fullFlush: true, action: 'ivs-not-found' });
+    trace('player', 'reload', { action: 'ivs-not-found' });
     return false;
   }
-
-  let prevQuality: IVSQuality | null = snapshot?.prev ?? null;
-  let wasAuto: boolean | null = snapshot?.wasAuto ?? null;
-  if (!snapshot) {
-    try {
-      prevQuality = ivs.getQuality?.() ?? null;
-      wasAuto = ivs.isAutoQualityMode?.() ?? null;
-    } catch {}
-  }
+  const quality = snapshot ?? snapshotQuality(ivs);
 
   let current = '';
   try {
@@ -187,28 +175,23 @@ export async function hardFlush(attempt = 0, snapshot?: QualitySnapshot): Promis
 
   // Keyed by the player's own channel: a multiview page holds masters for several.
   const channel = channelFromUsherUrl(current);
-  const fresh = attempt > 0 || !current ? await mintFor(channel) : null;
+  const fresh = attempt > 0 ? await mintFor(channel) : null;
 
   const target = fresh ?? current;
   if (!target) {
-    trace('player', 'reload', { fullFlush: true, action: 'no-path' });
+    trace('player', 'reload', { action: 'no-path' });
     return false;
   }
 
   try {
     ivs.load(target);
     ivs.play();
-    trace('player', 'reload', {
-      fullFlush: true,
-      action: fresh ? 'ivs-load-fresh' : 'ivs-load',
-      attempt,
-      channel,
-    });
+    trace('player', 'reload', { action: fresh ? 'ivs-load-fresh' : 'ivs-load', attempt, channel });
   } catch (err) {
-    trace('player', 'reload', { fullFlush: true, action: 'ivs-load-threw', err: String(err) });
+    trace('player', 'reload', { action: 'ivs-load-threw', err: String(err) });
     return false;
   }
 
-  verifyFlush(ivs, attempt, { prev: prevQuality, wasAuto });
+  verifyFlush(ivs, attempt, quality);
   return true;
 }

@@ -1,14 +1,11 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
 
-const ivsLoad = mock(() => {});
-const ivsPlay = mock(() => {});
 let ivsAvailable = true;
 
 const hardFlushMock = mock(() => Promise.resolve(ivsAvailable));
 
 // mock.module is process-global, so this keeps every export other test files import.
 mock.module('../../src/player/player', () => ({
-  findIVSPlayer: () => (ivsAvailable ? { load: ivsLoad, getPath: () => '/live/path', play: ivsPlay } : null),
   setFreshPathMint: () => {},
   hardFlush: hardFlushMock,
   switchRendition: () => null,
@@ -126,8 +123,6 @@ describe('stall recovery integration', () => {
   beforeEach(() => {
     clearTrace();
     ivsAvailable = true;
-    ivsLoad.mockClear();
-    ivsPlay.mockClear();
     hardFlushMock.mockClear();
   });
 

@@ -8,7 +8,6 @@ let handBacks = 0;
 const breakActiveCalls: boolean[] = [];
 
 mock.module('../../src/player/player', () => ({
-  findIVSPlayer: () => null,
   setFreshPathMint: () => {},
   hardFlush: () => {
     flushes++;
