@@ -9,7 +9,8 @@ import {
   mediaFormat,
   videoCodec,
 } from './m3u8-parser';
-import { BackupStreamManager, SITE_FLAVOR } from './backup-stream';
+import { BackupStreamManager } from './backup-stream';
+import { SITE_FLAVOR } from './usher';
 import { channelFromUsherUrl, normalizeUrl, urlShape } from '../utils/url';
 import { handBack, hardFlush, switchRendition } from '../player/player';
 import { setBreakActive } from '../player/observer';
