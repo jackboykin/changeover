@@ -102,33 +102,48 @@ function arm(video: HTMLVideoElement, type: string): void {
   });
   if (!armed) return;
   ladderTarget = video;
-  recover(video, 0, 0, video.currentTime);
+  recover(video, { taken: 0, looks: 0, lastT: video.currentTime });
 }
 
-function recover(target: HTMLVideoElement, taken: number, looks: number, lastT: number): void {
-  const delay = taken === 0 && looks === 0 ? RECOVERY_FIRST_LOOK_MS : RECOVERY_RETRY_MS;
+interface Look {
+  taken: number;
+  looks: number;
+  lastT: number;
+}
+
+// How a ladder ends. A null event ends it quietly, as for a ladder that never acted.
+interface Ending {
+  ev: string | null;
+  data?: Record<string, unknown>;
+}
+
+function recover(target: HTMLVideoElement, look: Look): void {
+  const delay = look.taken === 0 && look.looks === 0 ? RECOVERY_FIRST_LOOK_MS : RECOVERY_RETRY_MS;
   setTimeout(() => {
+    let next: Look | Ending;
     try {
-      step(target, taken, looks, lastT);
+      next = step(target, look);
     } catch (err) {
-      trace('recover', 'threw', { err: String(err) });
+      next = { ev: 'threw', data: { err: String(err) } };
+    }
+    if ('ev' in next) {
+      if (next.ev !== null) trace('recover', next.ev, next.data);
       if (ladderTarget === target) ladderTarget = null;
+    } else {
+      recover(target, next);
     }
   }, delay);
 }
 
-function step(target: HTMLVideoElement, taken: number, looks: number, lastT: number): void {
-  const release = (): void => {
-    if (ladderTarget === target) ladderTarget = null;
-  };
+function step(target: HTMLVideoElement, { taken, looks, lastT }: Look): Look | Ending {
   const v = document.querySelector('video');
-  if (v !== target) return release();
-  const finish = (ev: string, extra: Record<string, unknown> = {}): void => {
-    trace('recover', ev, { taken, looks, ...extra, ...videoState(v) });
-    release();
-  };
+  if (v !== target) return { ev: null };
+  const end = (ev: string, extra: Record<string, unknown> = {}): Ending => ({
+    ev,
+    data: { taken, looks, ...extra, ...videoState(v) },
+  });
 
-  if (looks >= RECOVERY_MAX_LOOKS) return finish('gave-up', { reason: 'looks' });
+  if (looks >= RECOVERY_MAX_LOOKS) return end('gave-up', { reason: 'looks' });
 
   let level = taken;
   if (level > 0 && v.currentTime > lastT + PROGRESS_MIN_S) {
@@ -144,14 +159,13 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
       if (jump !== null) {
         trace('recover', 'gap-jump', { taken: level, to: Number(jump.toFixed(2)), ...videoState(v) });
         v.currentTime = jump;
-        recover(target, level + 1, looks + 1, jump);
-        return;
+        return { taken: level + 1, looks: looks + 1, lastT: jump };
       }
     }
-    return taken > 0 ? finish('settled') : release();
+    return taken > 0 ? end('settled') : { ev: null };
   }
 
-  if (level >= RECOVERY_MAX_ACTIONS) return finish('gave-up');
+  if (level >= RECOVERY_MAX_ACTIONS) return end('gave-up');
 
   const action = level === RECOVERY_MAX_ACTIONS - 1 ? 'ivs-flush' : 'play';
   const at = v.currentTime;
@@ -165,7 +179,7 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
     v.play().catch(() => {});
   }
 
-  recover(target, level + 1, looks + 1, at);
+  return { taken: level + 1, looks: looks + 1, lastT: at };
 }
 
 const STALL_EVENTS = ['waiting', 'stalled', 'error'] as const;
