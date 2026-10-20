@@ -1,6 +1,7 @@
 import type { GQLHeaders, ChannelStreamInfo, StreamVariant } from '../types';
-import { AD_SIGNIFIER, AD_SEGMENT_URL_PATTERNS } from '../utils/constants';
+import { AD_SIGNIFIER } from '../utils/constants';
 import {
+  parseAttributes,
   parseMasterPlaylist,
   headerInt,
   MEDIA_SEQUENCE_TAG,
@@ -17,33 +18,6 @@ import { trace, digestPlaylist, captureBody, recordBreakSummary } from '../trace
 const STREAM_INFO_TTL_MS = 15 * 60_000;
 const STREAM_INFO_MAX_ENTRIES = 12;
 const AD_REPLACEMENT_URL = 'https://twitch.tv';
-const SEGMENT_CACHE_MAX_ENTRIES = 500;
-
-export class SegmentCache {
-  private adSegments = new Set<string>();
-
-  isAdSegment(url: string): boolean {
-    return this.adSegments.has(url);
-  }
-
-  markAdSegment(url: string): void {
-    // Re-adding moves a URL to the back, so the cap evicts the oldest.
-    this.adSegments.delete(url);
-    this.adSegments.add(url);
-    if (this.adSegments.size > SEGMENT_CACHE_MAX_ENTRIES) {
-      this.adSegments.delete(this.adSegments.values().next().value!);
-    }
-  }
-
-  getAdSegmentUrls(): string[] {
-    return [...this.adSegments];
-  }
-
-  clear(): void {
-    this.adSegments.clear();
-  }
-}
-
 const PREFETCH_TAG = '#EXT-X-TWITCH-PREFETCH:';
 const PRELOAD_HINT_TAG = '#EXT-X-PRELOAD-HINT:';
 const PART_TAG = '#EXT-X-PART:';
@@ -52,25 +26,15 @@ const TRACKING_URL_RE = /(X-TV-TWITCH-AD-[A-Z0-9-]+=")https?:\/\/[^"]*/g;
 // Emptied rather than removed: an empty list makes the player skip verification setup.
 const VERIFICATIONS_RE = /(X-TV-TWITCH-AD-ADVERIFICATIONS=")[^"]*/;
 
-function isAdSegmentUrl(url: string): boolean {
-  for (const pattern of AD_SEGMENT_URL_PATTERNS) {
-    if (url.includes(pattern)) return true;
-  }
-  return false;
-}
+const AD_CDN_URL = /\/adsquared\/|\/_404\/|\/processing/;
 
-function extractUriAttr(line: string): string {
-  const marker = 'URI="';
-  const idx = line.indexOf(marker);
-  if (idx === -1) return '';
-  const start = idx + marker.length;
-  const end = line.indexOf('"', start);
-  return end === -1 ? '' : line.substring(start, end);
+function uriOf(line: string, tag: string): string {
+  return parseAttributes(line.substring(tag.length))['URI'] ?? '';
 }
 
 // Live segments are tagged ,live and never come from an ad CDN; everything else is an ad.
 // Low-latency hints are blanked, since the player fetches them before reading any #EXTINF.
-export function markAdSegments(text: string, cache: SegmentCache): { text: string; marked: number } {
+export function markAdSegments(text: string, adSegments: Set<string>): { text: string; marked: number } {
   const hasTracking = text.includes('X-TV-TWITCH-AD-');
   const lines = text.split(/\r?\n/);
   const lastIdx = lines.length - 1;
@@ -87,21 +51,21 @@ export function markAdSegments(text: string, cache: SegmentCache): { text: strin
 
     if (i < lastIdx && line.startsWith('#EXTINF')) {
       const segUrl = lines[i + 1]!;
-      if (!line.includes(',live') || isAdSegmentUrl(segUrl)) {
-        cache.markAdSegment(segUrl);
+      if (!line.includes(',live') || AD_CDN_URL.test(segUrl)) {
+        adSegments.add(segUrl);
         marked++;
       }
     } else if (line.startsWith(PREFETCH_TAG) || line.startsWith(PRELOAD_HINT_TAG)) {
       const hintUrl = line.startsWith(PREFETCH_TAG)
         ? line.substring(PREFETCH_TAG.length).trim()
-        : extractUriAttr(line);
-      if (hintUrl) cache.markAdSegment(hintUrl);
+        : uriOf(line, PRELOAD_HINT_TAG);
+      if (hintUrl) adSegments.add(hintUrl);
       lines[i] = '';
       changed = true;
     } else if (line.startsWith(PART_TAG)) {
-      const uri = extractUriAttr(line);
-      if (uri && (cache.isAdSegment(uri) || isAdSegmentUrl(uri))) {
-        cache.markAdSegment(uri);
+      const uri = uriOf(line, PART_TAG);
+      if (uri && (adSegments.has(uri) || AD_CDN_URL.test(uri))) {
+        adSegments.add(uri);
         lines[i] = '';
         changed = true;
       }
@@ -124,9 +88,10 @@ export function liveNumbered(text: string): string {
 let nextBreakId = 1;
 
 export class M3U8Processor {
+  // The ad segments of a break served without a backup, which the hooks answer with empty video.
+  readonly adSegments = new Set<string>();
   private streamInfos = new Map<string, ChannelStreamInfo>();
   private streamByUrl = new Map<string, ChannelStreamInfo>();
-  private segmentCache = new SegmentCache();
   private backupManager: BackupStreamManager;
   private passedThrough = new Set<string>();
   constructor(
@@ -155,14 +120,6 @@ export class M3U8Processor {
       trace('hls', 'process-error', { isMaster, err: String(err) });
       return text;
     }
-  }
-
-  isKnownAdSegment(url: string): boolean {
-    return this.segmentCache.isAdSegment(url);
-  }
-
-  getAdSegmentUrls(): string[] {
-    return this.segmentCache.getAdSegmentUrls();
   }
 
   handleMasterPlaylist(url: string, text: string): string {
@@ -251,7 +208,7 @@ export class M3U8Processor {
 
     let marked = 0;
     if (inAd && !backupHit) {
-      const result = markAdSegments(served, this.segmentCache);
+      const result = markAdSegments(served, this.adSegments);
       served = result.text;
       marked = result.marked;
     }
@@ -306,7 +263,7 @@ export class M3U8Processor {
     const { id, startedAt, handBack: rendition, ...counts } = info.break!;
     info.break = null;
     this.backupManager.endBreak(info.channelName);
-    this.segmentCache.clear();
+    this.adSegments.clear();
 
     // A seam leaves the player's audio timeline out of sync on the return. Handing back the
     // rendition the player left is a switch it handles; a reload resets it when no switch was made.

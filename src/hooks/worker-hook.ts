@@ -107,6 +107,6 @@ async function processM3U8Request(
   worker: Worker,
 ): Promise<void> {
   const reply: MainToWorkerMessage = { key: 'M3U8Response', id, text: await proc.serve(url, text, isMaster) };
-  if (!isMaster) reply.adUrls = proc.getAdSegmentUrls();
+  if (!isMaster) reply.adUrls = [...proc.adSegments];
   worker.postMessage(reply);
 }

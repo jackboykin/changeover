@@ -32,7 +32,7 @@ export function installFetchHook(processor: M3U8Processor): void {
       if (typeof body === 'string') captureAccessTokenHash(body);
     }
 
-    if (processor.isKnownAdSegment(rawUrl)) {
+    if (processor.adSegments.has(rawUrl)) {
       trace('fetch', 'ad-redirect', { url: rawUrl.substring(0, 160) });
       return realFetch(EMPTY_MP4_DATA_URI);
     }

@@ -26,8 +26,7 @@ mock.module('../../src/player/observer', () => ({
   installObserver: () => {},
 }));
 
-const { M3U8Processor, markAdSegments, liveNumbered, SegmentCache } =
-  await import('../../src/hls/m3u8-processor');
+const { M3U8Processor, markAdSegments, liveNumbered } = await import('../../src/hls/m3u8-processor');
 const { traceEntries, clearTrace } = await import('../../src/trace');
 
 const headers: GQLHeaders = {
@@ -231,8 +230,8 @@ describe('ad break with no backup available', () => {
     await proc.handleMediaPlaylist(AVC_URL, CLEAN);
 
     const out = await proc.handleMediaPlaylist(AVC_URL, AD);
-    expect(proc.isKnownAdSegment('ad1.ts')).toBe(true);
-    expect(proc.isKnownAdSegment('live1.ts')).toBe(false);
+    expect(proc.adSegments.has('ad1.ts')).toBe(true);
+    expect(proc.adSegments.has('live1.ts')).toBe(false);
     expect(out).toContain('live1.ts');
     expect(out).not.toContain(DISCONTINUITY);
     expect(out).toContain('https://twitch.tv');
@@ -249,7 +248,7 @@ describe('ad break with no backup available', () => {
     proc.handleMasterPlaylist(MASTER_URL, AVC_MASTER);
     await proc.handleMediaPlaylist(AVC_URL, AD);
     await proc.handleMediaPlaylist(AVC_URL, CLEAN);
-    expect(proc.getAdSegmentUrls()).toEqual([]);
+    expect([...proc.adSegments]).toEqual([]);
   });
 
   it('recovers the backup mid-break after an earlier miss (once backoff clears)', async () => {
@@ -353,7 +352,7 @@ describe('regressions', () => {
 
     expect(out).not.toContain('ad-next.ts');
     expect(out).not.toContain('ad-part.ts');
-    expect(proc.isKnownAdSegment('https://cdn.example/adsquared/ad-next.ts')).toBe(true);
+    expect(proc.adSegments.has('https://cdn.example/adsquared/ad-next.ts')).toBe(true);
   });
 
   it('catches an ad segment tagged ,live by its ad-CDN url', async () => {
@@ -370,17 +369,17 @@ describe('regressions', () => {
     proc.handleMasterPlaylist(MASTER_URL, AVC_MASTER);
     await proc.handleMediaPlaylist(AVC_URL, SNEAKY);
 
-    expect(proc.isKnownAdSegment('https://cdn.example/adsquared/sneaky.ts')).toBe(true);
-    expect(proc.isKnownAdSegment('https://video-edge.example/real.ts')).toBe(false);
+    expect(proc.adSegments.has('https://cdn.example/adsquared/sneaky.ts')).toBe(true);
+    expect(proc.adSegments.has('https://video-edge.example/real.ts')).toBe(false);
   });
 });
 
 describe('markAdSegments', () => {
   it('marks non-live segments and leaves live ones alone', () => {
-    const cache = new SegmentCache();
+    const cache = new Set<string>();
     const { marked } = markAdSegments(AD, cache);
     expect(marked).toBe(1);
-    expect(cache.getAdSegmentUrls()).toEqual(['ad1.ts']);
+    expect([...cache]).toEqual(['ad1.ts']);
   });
 
   it('neutralizes every ad beacon URL and the verification scripts, nothing else', () => {
@@ -389,7 +388,7 @@ describe('markAdSegments', () => {
       'X-TV-TWITCH-AD-UNMUTE-URL="https://a.example/u",X-TV-TWITCH-AD-POD-LENGTH="1",' +
       'X-TV-TWITCH-AD-TRACKING-START="https://b.example/s?x=1",X-TV-TWITCH-AD-CREATIVE-VIEW="http://c.example/v",' +
       'X-TV-TWITCH-AD-ADVERIFICATIONS="eyJWZXJpZmljYXRpb24iOltdfQ=="';
-    const { text } = markAdSegments(AD.replace(/^#EXT-X-DATERANGE.*$/m, line), new SegmentCache());
+    const { text } = markAdSegments(AD.replace(/^#EXT-X-DATERANGE.*$/m, line), new Set<string>());
     expect(text).not.toContain('.example');
     expect(text).toContain('X-TV-TWITCH-AD-UNMUTE-URL="https://twitch.tv"');
     expect(text).toContain('X-TV-TWITCH-AD-TRACKING-START="https://twitch.tv"');
@@ -399,7 +398,7 @@ describe('markAdSegments', () => {
   });
 
   it('returns the original string when there is nothing to rewrite', () => {
-    const cache = new SegmentCache();
+    const cache = new Set<string>();
     const { text, marked } = markAdSegments(CLEAN, cache);
     expect(text).toBe(CLEAN);
     expect(marked).toBe(0);

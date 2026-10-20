@@ -110,7 +110,7 @@ describe('worker-hook integration', () => {
     installWorkerHook({
       serve: async (_url: string, text: string, isMaster: boolean) =>
         `${text}\n#${isMaster ? 'master' : 'media'}-processed`,
-      getAdSegmentUrls: () => ['https://ads.example.com/ad.ts'],
+      adSegments: new Set(['https://ads.example.com/ad.ts']),
     } as unknown as M3U8Processor);
   });
 

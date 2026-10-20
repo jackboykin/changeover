@@ -4,7 +4,7 @@ import type { M3U8Processor } from '../../src/hls/m3u8-processor';
 import { TWITCH_CLIENT_ID, GQL_URL } from '../../src/utils/constants';
 
 const processor = (serve: M3U8Processor['serve'] = async (_url, text) => text) =>
-  ({ isKnownAdSegment: () => false, serve }) as unknown as M3U8Processor;
+  ({ adSegments: new Set(), serve }) as unknown as M3U8Processor;
 
 describe('installFetchHook integration', () => {
   const g = globalThis as unknown as {
