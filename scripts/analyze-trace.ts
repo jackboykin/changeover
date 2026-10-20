@@ -39,7 +39,7 @@ for (const start of events.filter((e) => e.cat === 'break' && e.ev === 'start'))
   const tEnd = end?.t ?? dump.dumpedAt;
 
   console.log(
-    `━━ break #${String(id)}  ${String(start.data?.['channel'])}  ${start.data?.['isHEVC'] ? 'HEVC' : 'AVC'}  codec=${String(start.data?.['codec'])}  ${hms(t0)}`,
+    `━━ break #${String(id)}  ${String(start.data?.['channel'])}  codec=${String(start.data?.['codec'])}  ${hms(t0)}`,
   );
 
   const window = events.filter((e) => e.t >= t0 && e.t <= tEnd + 30_000);
@@ -57,10 +57,10 @@ for (const start of events.filter((e) => e.cat === 'break' && e.ev === 'start'))
       ].filter(Boolean);
       line = `poll     ${bits.join('  ')}`;
     } else if (e.cat === 'break' && e.ev === 'end') {
-      line = `break    end  polls=${d['polls']} hits=${d['backupHits']} misses=${d['backupMisses']} hevc=${d['isHEVC']} seam=${d['seam']}`;
+      line = `break    end  polls=${d['polls']} hits=${d['backupHits']} misses=${d['backupMisses']} seam=${d['seam']}`;
     } else if (e.cat === 'backup' && e.ev === 'variant-match') {
       const tag = d['exact'] ? 'exact' : 'DOWNGRADE';
-      line = `backup   variant-match  ${tag}  want ${d['target']}${d['targetHEVC'] ? ' HEVC' : ''} → ${d['chosen']}  [${d['offered']}]`;
+      line = `backup   variant-match  ${tag}  want ${d['target']} ${d['targetCodec']} → ${d['chosen']} ${d['chosenCodec']}  [${d['offered']}]`;
     } else if (e.cat === 'backup') {
       line = `backup   ${e.ev}  ${String(d['reason'] ?? d['flavor'] ?? '')}`.trimEnd();
     } else if (e.cat === 'player' && e.ev === 'quality-restore') {
@@ -74,7 +74,7 @@ for (const start of events.filter((e) => e.cat === 'break' && e.ev === 'start'))
     } else if (e.cat === 'recover') {
       line = `RECOVER  ${e.ev}  ${JSON.stringify(d)}`;
     } else if (e.cat === 'master' && e.ev === 'handled') {
-      line = `master   handled  variants=${d['variants']} hevc=${d['hevcVariants']}`;
+      line = `master   handled  variants=${d['variants']} codecs=${d['codecs']}`;
     } else if (e.ev === 'hls-status') {
       line = `HLS !${e.data?.['status']}  ${e.data?.['isMaster'] ? 'master' : 'media'}  ${e.data?.['url']}`;
     }
@@ -256,7 +256,7 @@ if (matches.length > 0) {
   for (const e of downgrades.slice(0, 5)) {
     const d = e.data ?? {};
     console.log(
-      `    want ${d['target']}${d['targetHEVC'] ? ' HEVC' : ''} → ${d['chosen']}  offered [${d['offered']}]`,
+      `    want ${d['target']} ${d['targetCodec']} → ${d['chosen']} ${d['chosenCodec']}  offered [${d['offered']}]`,
     );
   }
 }

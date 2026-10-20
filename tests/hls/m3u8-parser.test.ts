@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'bun:test';
-import { splitLines, parseAttributes, parseMasterPlaylist } from '../../src/hls/m3u8-parser';
+import {
+  splitLines,
+  parseAttributes,
+  parseMasterPlaylist,
+  videoCodec,
+  mediaFormat,
+} from '../../src/hls/m3u8-parser';
 
 describe('splitLines', () => {
   it('splits on newlines', () => {
@@ -52,13 +58,6 @@ describe('parseMasterPlaylist', () => {
     expect(variants[0]!.codecs).toBe('avc1.4D401F,mp4a.40.2');
   });
 
-  it('detects HEVC variants', () => {
-    const variants = parseMasterPlaylist(sampleMaster);
-    expect(variants[0]!.isHEVC).toBe(false);
-    expect(variants[1]!.isHEVC).toBe(false);
-    expect(variants[2]!.isHEVC).toBe(true);
-  });
-
   it('extracts URLs', () => {
     const variants = parseMasterPlaylist(sampleMaster);
     expect(variants[0]!.url).toBe('https://video.twitch.tv/v1/1080p30.m3u8');
@@ -76,5 +75,42 @@ describe('parseMasterPlaylist', () => {
     const variants = parseMasterPlaylist(malformed);
     expect(variants).toHaveLength(1);
     expect(variants[0]!.resolution).toBe('1280x720');
+  });
+});
+
+describe('videoCodec', () => {
+  it('names the video sample entry, wherever it sits in CODECS', () => {
+    expect(videoCodec('avc1.4D401F,mp4a.40.2')).toBe('avc1');
+    expect(videoCodec('mp4a.40.2, hev1.1.6.L150.90')).toBe('hev1');
+    expect(videoCodec('av01.0.08M.08,opus')).toBe('av01');
+  });
+
+  it('is empty for an audio-only rendition', () => {
+    expect(videoCodec('mp4a.40.2')).toBe('');
+  });
+});
+
+describe('mediaFormat', () => {
+  const ts = ['#EXTM3U', '#EXTINF:2.000,live', 'seg.ts'].join('\n');
+  const fmp4 = ['#EXTM3U', '#EXT-X-MAP:URI="init.mp4"', '#EXTINF:2.000,live', 'seg.mp4'].join('\n');
+
+  it('reads fMP4 from an init segment ahead of the media and pairs it with the codec', () => {
+    expect(mediaFormat(fmp4, 'hev1.1.6.L150,mp4a.40.2')).toBe('fmp4/hev1');
+    expect(mediaFormat(ts, 'avc1.64002A,mp4a.40.2')).toBe('ts/avc1');
+  });
+
+  it('reads TS when the only init segment belongs to a later stitched ad', () => {
+    const tsWithAd = [
+      ts,
+      '#EXT-X-DISCONTINUITY',
+      '#EXT-X-MAP:URI="ad-init.mp4"',
+      '#EXTINF:2.000,',
+      'ad.mp4',
+    ].join('\n');
+    expect(mediaFormat(tsWithAd, 'avc1.64002A')).toBe('ts/avc1');
+  });
+
+  it('tells a codec change apart within one container', () => {
+    expect(mediaFormat(fmp4, 'av01.0.08M.08')).not.toBe(mediaFormat(fmp4, 'hev1.1.6.L150'));
   });
 });

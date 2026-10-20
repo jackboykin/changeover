@@ -15,7 +15,6 @@ export interface StreamVariant {
   height: number;
   frameRate: number;
   codecs: string;
-  isHEVC: boolean;
 }
 
 export interface ChannelStreamInfo {
@@ -31,7 +30,6 @@ interface AdBreak {
   id: number;
   startedAt: number;
   codec: string;
-  isHEVC: boolean;
   seam: boolean;
   polls: number;
   backupHits: number;

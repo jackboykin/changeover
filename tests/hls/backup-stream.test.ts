@@ -25,7 +25,6 @@ const variant: StreamVariant = {
   height: 1080,
   frameRate: 60,
   codecs: 'avc1.64002A,mp4a.40.2',
-  isHEVC: false,
 };
 
 const BACKUP_MASTER = [
@@ -51,7 +50,7 @@ const use = <F>(f: F): F => {
   return f;
 };
 
-function fakeNet() {
+function fakeNet(master = BACKUP_MASTER) {
   let body = CLEAN_MEDIA;
   let status = 200;
   let once: { body: string; status: number } | null = null;
@@ -64,7 +63,7 @@ function fakeNet() {
       );
     }
     if (url.includes('usher')) {
-      return Promise.resolve(new Response(BACKUP_MASTER));
+      return Promise.resolve(new Response(master));
     }
     const one = once;
     once = null;
@@ -256,7 +255,6 @@ describe('flavor tiering (source quality first, android floor)', () => {
     height: 1440,
     frameRate: 60,
     codecs: 'hev1.1.6.L150',
-    isHEVC: true,
   };
 
   function tieredNet(webStitched: boolean, slowMs: Record<string, number> = {}) {

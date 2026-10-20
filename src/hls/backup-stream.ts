@@ -1,12 +1,12 @@
 import type { ChannelStreamInfo, GQLHeaders, StreamVariant } from '../types';
 import { AD_SIGNIFIER, PLAYBACK_ACCESS_TOKEN_HASH, GQL_URL, USHER_BASE_URL } from '../utils/constants';
-import { parseMasterPlaylist } from './m3u8-parser';
+import { parseMasterPlaylist, videoCodec } from './m3u8-parser';
 import { trace } from '../trace';
 
 interface Session {
   ladder: StreamVariant[];
   mediaUrl: string;
-  hevc: boolean;
+  codecs: string;
   acquiredAt: number;
   resolution: string;
   text: string;
@@ -22,7 +22,7 @@ interface Pending {
 interface Acquired {
   ladder: StreamVariant[];
   mediaUrl: string;
-  hevc: boolean;
+  codecs: string;
   text: string;
   flavor: string;
 }
@@ -141,9 +141,9 @@ export class BackupStreamManager {
     this.backoffs.delete(channelName);
   }
 
-  servesHEVC(channelName: string): boolean | null {
+  servedCodecs(channelName: string): string | null {
     const session = this.sessions.get(channelName);
-    return session && !('pending' in session) ? session.hevc : null;
+    return session && !('pending' in session) ? session.codecs : null;
   }
 
   async poll(target: UsherTarget, variant: StreamVariant): Promise<string | null> {
@@ -197,7 +197,7 @@ export class BackupStreamManager {
     const session: Session = {
       ladder: acquired.ladder,
       mediaUrl: acquired.mediaUrl,
-      hevc: acquired.hevc,
+      codecs: acquired.codecs,
       acquiredAt: now,
       resolution: variant.resolution,
       text: acquired.text,
@@ -226,7 +226,7 @@ export class BackupStreamManager {
     session.resolution = variant.resolution;
     if (chosen.url === session.mediaUrl) return;
     session.mediaUrl = chosen.url;
-    session.hevc = chosen.isHEVC;
+    session.codecs = chosen.codecs;
     session.fetchedAt = 0;
   }
 
@@ -320,7 +320,7 @@ export class BackupStreamManager {
         ladder,
         chosen,
         mediaUrl: chosen.url,
-        hevc: chosen.isHEVC,
+        codecs: chosen.codecs,
         text,
         flavor: flavor.playerType,
         stitched,
@@ -378,7 +378,8 @@ function pickVariant(ladder: readonly StreamVariant[], target: StreamVariant): S
 function traceMatch(target: StreamVariant, chosen: StreamVariant, ladder: readonly StreamVariant[]): void {
   trace('backup', 'variant-match', {
     target: target.resolution,
-    targetHEVC: target.isHEVC,
+    targetCodec: videoCodec(target.codecs),
+    chosenCodec: videoCodec(chosen.codecs),
     chosen: chosen.resolution,
     exact: chosen.resolution === target.resolution,
     offered: ladder.map((v) => v.resolution).join(','),

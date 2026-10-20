@@ -37,6 +37,26 @@ export function headerInt(text: string, tag: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+const AUDIO_CODEC = /^(mp4a|ac-3|ec-3|opus|flac)/;
+
+// The video sample entry, such as avc1 or hev1.
+export function videoCodec(codecs: string): string {
+  const video = codecs
+    .split(',')
+    .map((c) => c.trim())
+    .find((c) => !AUDIO_CODEC.test(c));
+  return video?.split('.')[0] ?? '';
+}
+
+// A rendition's container and video codec. fMP4 names an init segment before its first media
+// segment; MPEG-TS has none. Changing either inside one rendition is a seam the player can't see.
+export function mediaFormat(playlist: string, codecs: string): string {
+  const map = playlist.indexOf('#EXT-X-MAP');
+  const first = playlist.indexOf('#EXTINF');
+  const fmp4 = map !== -1 && (first === -1 || map < first);
+  return `${fmp4 ? 'fmp4' : 'ts'}/${videoCodec(codecs)}`;
+}
+
 export function parseAttributes(line: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   let i = 0;
@@ -82,15 +102,13 @@ export function parseMasterPlaylist(text: string): StreamVariant[] {
         const w = Number(parts[0]);
         const h = Number(parts[1]);
         if (!Number.isFinite(w) || !Number.isFinite(h)) continue;
-        const codecs = attrs['CODECS'] ?? '';
         variants.push({
           url: lines[i + 1]!,
           resolution,
           width: w,
           height: h,
           frameRate: Number(attrs['FRAME-RATE'] ?? 0),
-          codecs,
-          isHEVC: codecs.startsWith('hev') || codecs.startsWith('hvc'),
+          codecs: attrs['CODECS'] ?? '',
         });
       }
     }

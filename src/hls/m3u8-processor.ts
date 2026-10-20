@@ -6,6 +6,8 @@ import {
   headerInt,
   MEDIA_SEQUENCE_TAG,
   LIVE_SEQUENCE_TAG,
+  mediaFormat,
+  videoCodec,
 } from './m3u8-parser';
 import { BackupStreamManager, mintUsherUrl, SITE_FLAVOR } from './backup-stream';
 import { channelFromUsherUrl, normalizeUrl, urlTail } from '../utils/url';
@@ -174,24 +176,22 @@ export class M3U8Processor {
       isUsherV2: masterUrl.includes('/api/v2/'),
       usherParams: qIdx >= 0 ? masterUrl.substring(qIdx) : '',
       variants: {},
-      // Kept across a master re-fetch (token refresh, our own flush), or an HEVC break never flushes.
+      // Kept across a master re-fetch (token refresh, our own flush), or a seamed break never flushes.
       break: prev?.break ?? null,
     };
     this.streamInfos.set(channelName, info);
 
-    let hevc = 0;
     for (const variant of parseMasterPlaylist(text)) {
       const resolved = new URL(variant.url, masterUrl).href;
       variant.url = resolved;
       info.variants[resolved] = variant;
       this.streamByUrl.set(resolved, info);
-      if (variant.isHEVC) hevc++;
     }
 
     trace('master', 'handled', {
       channel: channelName,
       variants: Object.keys(info.variants).length,
-      hevcVariants: hevc,
+      codecs: [...new Set(Object.values(info.variants).map((v) => videoCodec(v.codecs)))].join(','),
       isUsherV2: info.isUsherV2,
     });
 
@@ -231,8 +231,9 @@ export class M3U8Processor {
       backupHit = backup !== null;
       if (backup !== null) {
         served = backup;
-        // Latched: one poll of AVC backup inside an HEVC rendition, or the reverse, is a seam.
-        if (this.backupManager.servesHEVC(info.channelName) !== variant.isHEVC) info.break!.seam = true;
+        // Latched: one poll served in another format than the rendition's own is a seam.
+        const backupCodecs = this.backupManager.servedCodecs(info.channelName) ?? '';
+        if (mediaFormat(backup, backupCodecs) !== mediaFormat(text, variant.codecs)) info.break!.seam = true;
       }
     }
 
@@ -273,19 +274,17 @@ export class M3U8Processor {
     url: string,
     raw: string,
   ): void {
-    const isHEVC = variant?.isHEVC === true;
     const codec = variant?.codecs ?? 'unknown';
     info.break = {
       id: nextBreakId++,
       startedAt: Date.now(),
       codec,
-      isHEVC,
       seam: false,
       polls: 0,
       backupHits: 0,
       backupMisses: 0,
     };
-    trace('break', 'start', { breakId: info.break.id, channel: info.channelName, isHEVC, codec });
+    trace('break', 'start', { breakId: info.break.id, channel: info.channelName, codec });
     captureBody('break-open', urlTail(url, 32), raw);
     setBreakActive(true);
   }
@@ -296,8 +295,8 @@ export class M3U8Processor {
     this.backupManager.endBreak(info.channelName);
     this.segmentCache.clear();
 
-    // Twitch serves HEVC as fMP4 and AVC as MPEG-TS. Swapping one into the other's rendition
-    // leaves the player's audio timeline out of sync on the return; a reload resets it.
+    // A seam leaves the player's audio timeline out of sync on the return; a reload resets it.
+    // Twitch serves HEVC as fMP4 and AVC as MPEG-TS, so an AVC backup in an HEVC rendition is one.
     if (counts.seam) void hardFlush();
 
     const now = Date.now();
