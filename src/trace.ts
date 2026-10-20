@@ -1,3 +1,4 @@
+import { version } from '../package.json';
 import { AD_SIGNIFIER } from './utils/constants';
 
 interface TraceEntry {
@@ -7,9 +8,6 @@ interface TraceEntry {
   ev: string;
   data?: Record<string, unknown>;
 }
-
-// Replaced at build time by scripts/add-header.ts.
-const SCRIPT_VERSION = '__VERSION__';
 
 // Split by volume, so ~2s polls can't evict the rare events.
 const HIGH_VOLUME_CATS = new Set(['poll', 'sample']);
@@ -150,7 +148,7 @@ export type TraceDump = ReturnType<typeof dumpTrace>;
 
 export function dumpTrace() {
   return {
-    scriptVersion: SCRIPT_VERSION,
+    scriptVersion: version,
     ua: navigator.userAgent,
     startedAt,
     dumpedAt: Date.now(),
@@ -206,5 +204,5 @@ export function installTraceExport(): void {
     true,
   );
 
-  trace('trace', 'installed', { version: SCRIPT_VERSION, consoleMirror });
+  trace('trace', 'installed', { version, consoleMirror });
 }

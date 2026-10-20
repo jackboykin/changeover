@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "bun build src/twitch-ad-block.user.ts --outdir dist --target browser && bun run scripts/add-header.ts",
+    "build": "bun run scripts/build.ts",
     "typecheck": "bun tsc --noEmit",
     "test": "bun test",
     "lint": "eslint src tests scripts",
