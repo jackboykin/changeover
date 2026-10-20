@@ -9,7 +9,7 @@
   "scripts": {
     "build": "bun run scripts/build.ts",
     "typecheck": "bun tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --isolate",
     "lint": "oxlint src tests scripts",
     "format": "oxfmt --check",
     "format:write": "oxfmt"

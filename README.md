@@ -56,7 +56,7 @@ bun run build
 To check a change, run the tests, type checker, linter, and formatter:
 
 ```sh
-bun test
+bun run test
 bun run typecheck
 bun run lint
 bun run format

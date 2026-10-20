@@ -8,7 +8,6 @@ let handBacks = 0;
 const breakActiveCalls: boolean[] = [];
 
 await mock.module('../../src/player/player', () => ({
-  setFreshPathMint: () => {},
   hardFlush: () => {
     flushes++;
     return Promise.resolve(true);
@@ -22,7 +21,6 @@ await mock.module('../../src/player/player', () => ({
 
 await mock.module('../../src/player/observer', () => ({
   setBreakActive: (active: boolean) => breakActiveCalls.push(active),
-  installObserver: () => {},
 }));
 
 const { M3U8Processor, markAdSegments, liveNumbered } = await import('../../src/hls/m3u8-processor');

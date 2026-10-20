@@ -1,16 +1,10 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach, afterEach, setSystemTime } from 'bun:test';
 
 let ivsAvailable = true;
 
 const hardFlushMock = mock(() => Promise.resolve(ivsAvailable));
 
-// mock.module is process-global, so this keeps every export other test files import.
-await mock.module('../../src/player/player', () => ({
-  setFreshPathMint: () => {},
-  hardFlush: hardFlushMock,
-  switchRendition: () => null,
-  handBack: () => {},
-}));
+await mock.module('../../src/player/player', () => ({ hardFlush: hardFlushMock }));
 
 const { installObserver, gapJumpTarget, setBreakActive, sample } = await import('../../src/player/observer');
 const { clearTrace, traceEntries } = await import('../../src/trace');
@@ -131,6 +125,7 @@ describe('stall recovery integration', () => {
     (globalThis as unknown as { setTimeout: unknown }).setTimeout = realSetTimeout;
     (globalThis as unknown as { setInterval: unknown }).setInterval = realSetInterval;
     (globalThis as unknown as { document: unknown }).document = realDocument;
+    setSystemTime();
   });
 
   function recoverActions(): string[] {
@@ -210,8 +205,10 @@ describe('stall recovery integration', () => {
     });
   }
 
-  // Must run before any test that opens a seam window: closing one starts a 30s trailing window.
   it('leaves a mid-viewing gap alone outside the seam window', () => {
+    // Close any break an earlier test opened, then step past its trailing window.
+    setBreakActive(false);
+    setSystemTime(new Date(Date.now() + 60_000));
     video = parkedVideo();
     installFakeDom(video);
     installObserver();
