@@ -1,6 +1,7 @@
 import type { GQLHeaders } from '../types';
 import { TWITCH_CLIENT_ID, EMPTY_MP4_DATA_URI, GQL_URL } from '../utils/constants';
 import type { M3U8Processor } from '../hls/m3u8-processor';
+import { withBody } from '../utils/response';
 import { normalizeUrl, classifyHlsUrl, urlShape } from '../utils/url';
 import { trace } from '../trace';
 
@@ -45,16 +46,7 @@ export function installFetchHook(processor: M3U8Processor): void {
         trace('fetch', 'hls-status', { isMaster, status: resp.status, url: urlShape(url) });
         return resp;
       }
-      const processed = await processor.serve(url, await resp.text(), isMaster);
-      const headers = new Headers(resp.headers);
-      headers.delete('content-length');
-      headers.delete('content-encoding');
-      headers.delete('transfer-encoding');
-      return new Response(processed, {
-        status: resp.status,
-        statusText: resp.statusText,
-        headers,
-      });
+      return withBody(resp, await processor.serve(url, await resp.text(), isMaster));
     });
   } as typeof fetch;
 }
