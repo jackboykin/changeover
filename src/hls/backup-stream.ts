@@ -117,10 +117,17 @@ export class BackupStreamManager {
   private sessions = new Map<string, Session | Pending>();
   private backoffs = new Map<string, Backoff>();
 
-  constructor(
-    private getHeaders: () => GQLHeaders,
-    private realFetch: typeof fetch,
-  ) {}
+  private readonly getHeaders: () => GQLHeaders;
+  private readonly realFetch: typeof fetch;
+
+  constructor(getHeaders: () => GQLHeaders, realFetch: typeof fetch) {
+    this.getHeaders = getHeaders;
+    this.realFetch = realFetch;
+  }
+
+  mint(target: UsherTarget, flavor: TokenFlavor): Promise<string | null> {
+    return mintUsherUrl(target, this.getHeaders(), this.realFetch, flavor);
+  }
 
   // An installed session is kept for the next break; an in-flight one is dropped, as its token
   // will have aged by then.
@@ -294,7 +301,7 @@ export class BackupStreamManager {
     flavor: TokenFlavor,
   ): Promise<(Acquired & { stitched: boolean }) | null> {
     try {
-      const masterUrl = await mintUsherUrl(target, this.getHeaders(), this.realFetch, flavor);
+      const masterUrl = await this.mint(target, flavor);
       if (!masterUrl) return null;
 
       const masterResp = await this.realFetch(masterUrl);

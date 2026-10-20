@@ -22,7 +22,7 @@ describe('Executed code behavior', () => {
       setTimeout: globalThis.setTimeout,
       clearTimeout: globalThis.clearTimeout,
     };
-    scope.self = scope;
+    scope['self'] = scope;
     return { scope, messages, messageListeners };
   }
 
@@ -47,7 +47,7 @@ describe('Executed code behavior', () => {
       fetchedUrls.push(url);
       return new Response('ok');
     });
-    scope.fetch = originalFetch;
+    scope['fetch'] = originalFetch;
 
     const code = buildWorkerInjectionCode();
     const fn = new Function(...Object.keys(scope), code);
@@ -58,7 +58,7 @@ describe('Executed code behavior', () => {
       listener({ data: { key: 'M3U8Response', id: 'none', text: '', adUrls: [adUrl] } });
     }
 
-    const hookedFetch = scope.fetch as typeof fetch;
+    const hookedFetch = scope['fetch'] as typeof fetch;
     await hookedFetch(adUrl);
 
     const lastFetchedUrl = fetchedUrls.at(-1);
@@ -68,7 +68,7 @@ describe('Executed code behavior', () => {
   it('M3U8 URLs trigger M3U8Request message to main thread', async () => {
     const { scope, messages } = createMockWorkerScope();
 
-    scope.fetch = mock(async (input: RequestInfo | URL) => {
+    scope['fetch'] = mock(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : String(input);
       if (url.includes('.m3u8')) {
         return new Response('#EXTM3U\n#EXTINF:2.000,\nseg.ts', { status: 200 });
@@ -82,7 +82,7 @@ describe('Executed code behavior', () => {
 
     messages.length = 0;
 
-    void (scope.fetch as typeof fetch)('https://video-edge.example.com/media.m3u8');
+    void (scope['fetch'] as typeof fetch)('https://video-edge.example.com/media.m3u8');
 
     await Bun.sleep(10);
 
@@ -94,7 +94,7 @@ describe('Executed code behavior', () => {
   it('non-M3U8 URLs pass through to realFetch', async () => {
     const { scope, messages } = createMockWorkerScope();
     const realFetchMock = mock(async () => new Response('real response'));
-    scope.fetch = realFetchMock;
+    scope['fetch'] = realFetchMock;
 
     const code = buildWorkerInjectionCode();
     const fn = new Function(...Object.keys(scope), code);
@@ -102,7 +102,7 @@ describe('Executed code behavior', () => {
 
     messages.length = 0;
 
-    const response = await (scope.fetch as typeof fetch)('https://example.com/some-resource.js');
+    const response = await (scope['fetch'] as typeof fetch)('https://example.com/some-resource.js');
     const text = await response.text();
     expect(text).toBe('real response');
 
@@ -113,7 +113,7 @@ describe('Executed code behavior', () => {
   it('preserves Request input when fetching intercepted M3U8 URLs', async () => {
     const { scope, messages, messageListeners } = createMockWorkerScope();
     const seenInputs: Array<RequestInfo | URL> = [];
-    scope.fetch = mock(async (input: RequestInfo | URL) => {
+    scope['fetch'] = mock(async (input: RequestInfo | URL) => {
       seenInputs.push(input);
       return new Response('#EXTM3U\n#EXTINF:2.000,\nseg.ts', { status: 200 });
     });
@@ -124,7 +124,7 @@ describe('Executed code behavior', () => {
 
     messages.length = 0;
     const req = new Request('https://video-edge.example.com/live.m3u8', { method: 'GET' });
-    const fetchPromise = (scope.fetch as typeof fetch)(req);
+    const fetchPromise = (scope['fetch'] as typeof fetch)(req);
     await Bun.sleep(10);
 
     const m3u8Msg = messages.find((m) => (m as { key?: string }).key === 'M3U8Request') as

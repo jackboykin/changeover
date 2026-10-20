@@ -9,7 +9,7 @@ import {
   mediaFormat,
   videoCodec,
 } from './m3u8-parser';
-import { BackupStreamManager, mintUsherUrl, SITE_FLAVOR } from './backup-stream';
+import { BackupStreamManager, SITE_FLAVOR } from './backup-stream';
 import { channelFromUsherUrl, normalizeUrl, urlShape } from '../utils/url';
 import { handBack, hardFlush, switchRendition } from '../player/player';
 import { setBreakActive } from '../player/observer';
@@ -95,12 +95,9 @@ export class M3U8Processor {
   readonly adSegments = new Set<string>();
   private streamInfos = new Map<string, ChannelStreamInfo>();
   private streamByUrl = new Map<string, ChannelStreamInfo>();
-  private backupManager: BackupStreamManager;
+  private readonly backupManager: BackupStreamManager;
 
-  constructor(
-    private getHeaders: () => GQLHeaders,
-    private realFetch: typeof fetch,
-  ) {
+  constructor(getHeaders: () => GQLHeaders, realFetch: typeof fetch) {
     this.backupManager = new BackupStreamManager(getHeaders, realFetch);
   }
 
@@ -111,7 +108,7 @@ export class M3U8Processor {
       trace('player', 'mint', { flavor: 'NO-STREAM-INFO', channel: channelName });
       return null;
     }
-    const url = await mintUsherUrl(info, this.getHeaders(), this.realFetch, SITE_FLAVOR).catch(() => null);
+    const url = await this.backupManager.mint(info, SITE_FLAVOR).catch(() => null);
     trace('player', 'mint', { flavor: url ? 'site' : 'FAILED', channel: channelName });
     return url;
   }
@@ -176,15 +173,10 @@ export class M3U8Processor {
     }
     info.lastSeenAt = Date.now();
 
-    return this.process(mediaUrl, text, info, info.variants[mediaUrl]!);
+    return this.process(text, info, info.variants[mediaUrl]!);
   }
 
-  private async process(
-    url: string,
-    text: string,
-    info: ChannelStreamInfo,
-    variant: StreamVariant,
-  ): Promise<string> {
+  private async process(text: string, info: ChannelStreamInfo, variant: StreamVariant): Promise<string> {
     const rawDigest = digestPlaylist(text);
     const inAd = text.includes(AD_SIGNIFIER);
 
