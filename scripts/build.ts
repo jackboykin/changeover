@@ -1,11 +1,14 @@
 import pkg from '../package.json';
 
 const header = `// ==UserScript==
-// @name         Twitch Ad Block
-// @namespace    http://tampermonkey.net/
+// @name         Changeover
+// @namespace    ${pkg.homepage}
 // @version      ${pkg.version}
 // @description  ${pkg.description}
 // @author       ${pkg.author}
+// @homepageURL  ${pkg.homepage}
+// @supportURL   ${pkg.homepage}/issues
+// @downloadURL  ${pkg.homepage}/releases/latest/download/changeover.user.js
 // @match        *://*.twitch.tv/*
 // @grant        none
 // @run-at       document-start
@@ -13,7 +16,7 @@ const header = `// ==UserScript==
 `;
 
 const result = await Bun.build({
-  entrypoints: [`${import.meta.dir}/../src/twitch-ad-block.user.ts`],
+  entrypoints: [`${import.meta.dir}/../src/changeover.user.ts`],
   outdir: `${import.meta.dir}/../dist`,
   target: 'browser',
   banner: header,

@@ -1,8 +1,9 @@
 {
-  "name": "twitch-ad-block",
+  "name": "changeover",
   "version": "3.0",
   "description": "Blocks ads on Twitch.",
   "author": "jackboykin",
+  "homepage": "https://github.com/jackboykin/changeover",
   "license": "MIT",
   "type": "module",
   "scripts": {

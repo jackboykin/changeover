@@ -7,7 +7,7 @@ import { installTraceExport } from './trace';
 
 // A second copy of the script (installed twice, or an old version beside a new one) shares this
 // page, and would chain a second fetch hook and inject the worker twice.
-const INSTALLED = Symbol.for('twitch-ad-block.installed');
+const INSTALLED = Symbol.for('changeover.installed');
 const g = globalThis as unknown as Record<symbol, true | undefined>;
 
 if (!g[INSTALLED]) {

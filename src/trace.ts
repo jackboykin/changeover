@@ -23,7 +23,7 @@ const HIGH_VOLUME_CATS = new Set(['poll', 'sample']);
 const FREQUENT_MAX = 700;
 const RARE_MAX = 300;
 const BODIES_MAX = 12;
-const BREAKS_LS_KEY = 'tab-trace-breaks';
+const BREAKS_LS_KEY = 'changeover-breaks';
 const BREAKS_MAX = 50;
 
 const startedAt = Date.now();
@@ -137,7 +137,7 @@ function downloadTrace(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `tab-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.download = `changeover-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

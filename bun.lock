@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "twitch-ad-block",
+      "name": "changeover",
       "devDependencies": {
         "@types/bun": "latest",
         "eslint": "^10.2.1",

@@ -1,0 +1,26 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Check the tag matches package.json
+        run: test "$GITHUB_REF_NAME" = "v$(bun -p "require('./package.json').version")"
+      - run: bun test
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format
+      - run: bun run build
+      - run: gh release create "$GITHUB_REF_NAME" dist/changeover.user.js --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

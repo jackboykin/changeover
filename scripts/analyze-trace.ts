@@ -5,7 +5,7 @@ type Entry = TraceDump['events'][number];
 
 const path = process.argv[2];
 if (!path) {
-  console.error('usage: bun run scripts/analyze-trace.ts <tab-trace-*.json>');
+  console.error('usage: bun run scripts/analyze-trace.ts <changeover-trace-*.json>');
   process.exit(1);
 }
 const dump = JSON.parse(readFileSync(path, 'utf-8')) as TraceDump;

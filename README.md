@@ -1,22 +1,22 @@
-# Twitch Ad Block
+# Changeover
 
 A userscript that removes ads from Twitch.
 
 ## Install
 
-To install the script, build it and add it to a userscript manager:
+To install the script:
 
-1. Install [Bun](https://bun.sh/) and a userscript manager such as
+1. Install a userscript manager: [Violentmonkey](https://violentmonkey.github.io/) or
    [Tampermonkey](https://www.tampermonkey.net/).
-2. Build the script:
+2. Open
+   [changeover.user.js](https://github.com/jackboykin/changeover/releases/latest/download/changeover.user.js).
+   The manager shows an install page. Click **Install**.
+3. Reload any open Twitch tabs.
 
-   ```sh
-   bun install
-   bun run build
-   ```
+In Chrome and other Chromium browsers, also turn on **Allow User Scripts** on the manager's
+extension details page.
 
-3. In the userscript manager, add `dist/twitch-ad-block.user.js` as a new script.
-4. Reload any open Twitch tabs.
+The manager checks for new releases and updates the script itself.
 
 ## What to expect
 
@@ -45,6 +45,14 @@ break, the script restarts playback if it stops moving.
 
 ## Development
 
+To build the script, install [Bun](https://bun.sh/) and run the build. It writes
+`dist/changeover.user.js`:
+
+```sh
+bun install
+bun run build
+```
+
 To check a change, run the tests, type checker, linter, and formatter:
 
 ```sh
@@ -61,3 +69,14 @@ bun run scripts/analyze-trace.ts TRACE_FILE
 ```
 
 `TRACE_FILE` is the path to the log.
+
+To publish a release, set `version` in `package.json`, commit, then push a matching tag. The
+release workflow tests and builds the script and attaches it to a GitHub release. Userscript managers
+update only when the version goes up.
+
+```sh
+git tag vVERSION
+git push origin vVERSION
+```
+
+`VERSION` is the new `version` from `package.json`.
