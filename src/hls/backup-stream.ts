@@ -3,13 +3,16 @@ import { AD_SIGNIFIER, PLAYBACK_ACCESS_TOKEN_HASH, GQL_URL, USHER_BASE_URL } fro
 import { parseMasterPlaylist, videoCodec } from './m3u8-parser';
 import { trace } from '../trace';
 
-interface Session {
+interface Acquired {
   ladder: StreamVariant[];
-  mediaUrl: string;
   served: StreamVariant;
+  text: string;
+  flavor: string;
+}
+
+interface Session extends Omit<Acquired, 'flavor'> {
   acquiredAt: number;
   resolution: string;
-  text: string;
   fetchedAt: number;
   lastPollAt: number;
   timer: ReturnType<typeof setInterval> | null;
@@ -17,14 +20,6 @@ interface Session {
 
 interface Pending {
   pending: true;
-}
-
-interface Acquired {
-  ladder: StreamVariant[];
-  mediaUrl: string;
-  served: StreamVariant;
-  text: string;
-  flavor: string;
 }
 
 interface Backoff {
@@ -44,7 +39,6 @@ interface TokenFlavor {
   platform: string;
 }
 
-export const BACKUP_FLAVOR: TokenFlavor = { playerType: 'autoplay', platform: 'android' };
 export const SITE_FLAVOR: TokenFlavor = { playerType: 'site', platform: 'web' };
 
 // In priority order. The web flavors carry the full ladder, HEVC included; android is a
@@ -52,7 +46,7 @@ export const SITE_FLAVOR: TokenFlavor = { playerType: 'site', platform: 'web' };
 const BACKUP_FLAVORS: readonly TokenFlavor[] = [
   { playerType: 'embed', platform: 'web' },
   { playerType: 'popout', platform: 'web' },
-  BACKUP_FLAVOR,
+  { playerType: 'autoplay', platform: 'android' },
 ];
 
 export type UsherTarget = Pick<ChannelStreamInfo, 'channelName' | 'usherParams' | 'isUsherV2'>;
@@ -196,7 +190,6 @@ export class BackupStreamManager {
     const now = Date.now();
     const session: Session = {
       ladder: acquired.ladder,
-      mediaUrl: acquired.mediaUrl,
       served: acquired.served,
       acquiredAt: now,
       resolution: variant.resolution,
@@ -224,8 +217,7 @@ export class BackupStreamManager {
     const chosen = pickVariant(session.ladder, variant)!;
     traceMatch(variant, chosen, session.ladder);
     session.resolution = variant.resolution;
-    if (chosen.url === session.mediaUrl) return;
-    session.mediaUrl = chosen.url;
+    if (chosen === session.served) return;
     session.served = chosen;
     session.fetchedAt = 0;
   }
@@ -251,7 +243,7 @@ export class BackupStreamManager {
     let reason = 'fetch-error';
     const at = Date.now();
     try {
-      const resp = await this.realFetch(session.mediaUrl);
+      const resp = await this.realFetch(session.served.url);
       if (resp.status === 200) {
         const text = await resp.text();
         if (!text.includes(AD_SIGNIFIER)) {
@@ -289,7 +281,7 @@ export class BackupStreamManager {
         trace('backup', 'flavor-stitched', { channel: target.channelName, flavor: got.flavor });
         continue;
       }
-      traceMatch(variant, got.chosen, got.ladder);
+      traceMatch(variant, got.served, got.ladder);
       return got;
     }
     return null;
@@ -299,7 +291,7 @@ export class BackupStreamManager {
     target: UsherTarget,
     variant: StreamVariant,
     flavor: TokenFlavor,
-  ): Promise<(Acquired & { chosen: StreamVariant; stitched: boolean }) | null> {
+  ): Promise<(Acquired & { stitched: boolean }) | null> {
     try {
       const masterUrl = await mintUsherUrl(target, this.getHeaders(), this.realFetch, flavor);
       if (!masterUrl) return null;
@@ -315,15 +307,12 @@ export class BackupStreamManager {
       if (mediaResp.status !== 200) return null;
       const text = await mediaResp.text();
 
-      const stitched = text.includes(AD_SIGNIFIER);
       return {
         ladder,
-        chosen,
-        mediaUrl: chosen.url,
         served: chosen,
         text,
         flavor: flavor.playerType,
-        stitched,
+        stitched: text.includes(AD_SIGNIFIER),
       };
     } catch (err) {
       trace('backup', 'flavor-error', {
@@ -338,7 +327,7 @@ export class BackupStreamManager {
   private recordFailure(channelName: string): void {
     const backoff = this.backoffs.get(channelName) ?? { failCount: 0, until: 0 };
     backoff.failCount++;
-    const cap = Math.min(BACKOFF_BASE_MS * 2 ** Math.min(backoff.failCount, 15), BACKOFF_MAX_MS);
+    const cap = Math.min(BACKOFF_BASE_MS * 2 ** backoff.failCount, BACKOFF_MAX_MS);
     backoff.until = Date.now() + Math.random() * cap;
     this.backoffs.set(channelName, backoff);
     trace('backup', 'backoff', {
