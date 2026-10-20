@@ -173,46 +173,6 @@ if (real.length > 0) {
   console.log(`  → ${clean} imperceptible blip(s), ${slow} slow recovery(ies), ${stuck} left stuck`);
 }
 
-const FREEZE_MIN_S = 1.5;
-const samples = events.filter((e) => e.cat === 'sample' && typeof e.data?.['t'] === 'number');
-const freezes: { start: Entry; end: Entry; playhead: number }[] = [];
-let runStart = -1;
-for (let i = 1; i < samples.length; i++) {
-  const prev = samples[i - 1]!;
-  const cur = samples[i]!;
-  const frozen = cur.data?.['paused'] === true && num(prev.data?.['t']) === num(cur.data?.['t']);
-  if (frozen) {
-    if (runStart < 0) runStart = i - 1;
-  } else if (runStart >= 0) {
-    freezes.push({
-      start: samples[runStart]!,
-      end: samples[i - 1]!,
-      playhead: num(samples[runStart]!.data?.['t']) ?? 0,
-    });
-    runStart = -1;
-  }
-}
-if (runStart >= 0) {
-  freezes.push({
-    start: samples[runStart]!,
-    end: samples[samples.length - 1]!,
-    playhead: num(samples[runStart]!.data?.['t']) ?? 0,
-  });
-}
-const lastSample = samples[samples.length - 1];
-const realFreezes = freezes.filter((f) => (f.end.t - f.start.t) / 1000 >= FREEZE_MIN_S);
-if (realFreezes.length > 0) {
-  console.log(`\n⚠ playhead FREEZES (no stall event — sampler only): ${realFreezes.length}`);
-  for (const f of realFreezes) {
-    const dur = ((f.end.t - f.start.t) / 1000).toFixed(1);
-    let outcome: string;
-    if (f.end !== lastSample) outcome = 'then resumed';
-    else if (dump.dumpedAt - f.end.t < 2000) outcome = 'still frozen at dump end';
-    else outcome = 'sampler window ended while still frozen — outcome unknown';
-    console.log(`    frozen ≥${dur}s at playhead ${f.playhead.toFixed(1)}s (${outcome})`);
-  }
-}
-
 const recoverEvents = events.filter((e) => e.cat === 'recover');
 if (recoverEvents.length > 0) {
   const nonAction = ['settled', 'gave-up'];
