@@ -7,10 +7,8 @@
   "type": "module",
   "scripts": {
     "build": "bun build src/twitch-ad-block.user.ts --outdir dist --target browser && bun run scripts/add-header.ts",
-    "dev": "bun build src/twitch-ad-block.user.ts --outdir dist --target browser --watch",
     "typecheck": "bun tsc --noEmit",
     "test": "bun test",
-    "test:watch": "bun test --watch",
     "lint": "eslint src tests scripts",
     "format": "prettier --check src tests scripts",
     "format:write": "prettier --write src tests scripts"
