@@ -14,20 +14,14 @@ const gqlHeaders: GQLHeaders = {
   accessTokenHash: null,
 };
 
-let m3u8Processor: M3U8Processor | null = null;
-
 export function getGQLHeaders(): GQLHeaders {
   return { ...gqlHeaders };
 }
 
-export function setM3U8Processor(processor: M3U8Processor | null): void {
-  m3u8Processor = processor;
-}
-
-export function installFetchHook(): typeof fetch {
+export function installFetchHook(processor: M3U8Processor): void {
   const realFetch = window.fetch;
 
-  const hooked = function (this: typeof globalThis, input: RequestInfo | URL, init?: RequestInit) {
+  window.fetch = function (this: typeof globalThis, input: RequestInfo | URL, init?: RequestInit) {
     const rawUrl = input instanceof Request ? input.url : String(input);
     const url = normalizeUrl(rawUrl);
 
@@ -38,47 +32,31 @@ export function installFetchHook(): typeof fetch {
       if (typeof body === 'string') captureAccessTokenHash(body);
     }
 
-    const proc = m3u8Processor;
-    if (proc) {
-      if (proc.isKnownAdSegment(rawUrl)) {
-        trace('fetch', 'ad-redirect', { url: rawUrl.substring(0, 160) });
-        return realFetch(EMPTY_MP4_DATA_URI);
-      }
-
-      const { isHls, isMaster } = classifyHlsUrl(url);
-      if (isHls) {
-        return realFetch.call(this, input, init).then(async (resp: Response) => {
-          if (resp.status !== 200) {
-            trace('fetch', 'hls-status', { isMaster, status: resp.status, url: urlTail(url) });
-            return resp;
-          }
-          const text = await resp.text();
-          let processed = text;
-          try {
-            processed = isMaster
-              ? proc.handleMasterPlaylist(url, text)
-              : await proc.handleMediaPlaylist(url, text);
-          } catch (err) {
-            trace('fetch', 'process-error', { isMaster, err: String(err) });
-          }
-          const headers = new Headers(resp.headers);
-          headers.delete('content-length');
-          headers.delete('content-encoding');
-          headers.delete('transfer-encoding');
-          return new Response(processed, {
-            status: resp.status,
-            statusText: resp.statusText,
-            headers,
-          });
-        });
-      }
+    if (processor.isKnownAdSegment(rawUrl)) {
+      trace('fetch', 'ad-redirect', { url: rawUrl.substring(0, 160) });
+      return realFetch(EMPTY_MP4_DATA_URI);
     }
 
-    return realFetch.call(this, input, init);
+    const { isHls, isMaster } = classifyHlsUrl(url);
+    if (!isHls) return realFetch.call(this, input, init);
+
+    return realFetch.call(this, input, init).then(async (resp: Response) => {
+      if (resp.status !== 200) {
+        trace('fetch', 'hls-status', { isMaster, status: resp.status, url: urlTail(url) });
+        return resp;
+      }
+      const processed = await processor.serve(url, await resp.text(), isMaster);
+      const headers = new Headers(resp.headers);
+      headers.delete('content-length');
+      headers.delete('content-encoding');
+      headers.delete('transfer-encoding');
+      return new Response(processed, {
+        status: resp.status,
+        statusText: resp.statusText,
+        headers,
+      });
+    });
   } as typeof fetch;
-  window.fetch = hooked;
-  // fetch throws when called with any receiver but the window.
-  return realFetch.bind(globalThis);
 }
 
 const HEADER_MAPPINGS: Record<string, keyof GQLHeaders> = {

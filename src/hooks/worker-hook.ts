@@ -3,12 +3,6 @@ import { buildWorkerInjectionCode } from './worker-inject';
 import type { M3U8Processor } from '../hls/m3u8-processor';
 import { trace } from '../trace';
 
-let processor: M3U8Processor | null = null;
-
-export function setWorkerProcessor(proc: M3U8Processor): void {
-  processor = proc;
-}
-
 function isTwitchHostname(hostname: string): boolean {
   return hostname === 'twitch.tv' || hostname.endsWith('.twitch.tv');
 }
@@ -37,7 +31,7 @@ function tryInlineBlobWorkerSource(workerUrl: string, injectionCode: string): st
   return null;
 }
 
-export function installWorkerHook(): void {
+export function installWorkerHook(processor: M3U8Processor): void {
   const OriginalWorker = window.Worker;
 
   const HookedWorker = class TwitchWorker extends OriginalWorker {
@@ -74,7 +68,9 @@ export function installWorkerHook(): void {
       const blobUrl = URL.createObjectURL(new Blob([modifiedSource], { type: 'application/javascript' }));
       super(blobUrl, options);
 
-      this.addEventListener('message', (e: MessageEvent) => handleWorkerMessage(e.data, this, blobUrl));
+      this.addEventListener('message', (e: MessageEvent) =>
+        handleWorkerMessage(processor, e.data, this, blobUrl),
+      );
     }
   };
 
@@ -85,7 +81,12 @@ export function installWorkerHook(): void {
   });
 }
 
-function handleWorkerMessage(msg: WorkerMessage, worker: Worker, blobUrl: string): void {
+function handleWorkerMessage(
+  processor: M3U8Processor,
+  msg: WorkerMessage,
+  worker: Worker,
+  blobUrl: string,
+): void {
   switch (msg?.key) {
     case 'WorkerReady':
       trace('worker', 'ready', {});
@@ -95,7 +96,7 @@ function handleWorkerMessage(msg: WorkerMessage, worker: Worker, blobUrl: string
       trace(msg.cat, msg.ev, msg.data);
       break;
     case 'M3U8Request':
-      if (processor) void processM3U8Request(processor, msg, worker);
+      void processM3U8Request(processor, msg, worker);
       break;
   }
 }
@@ -105,16 +106,7 @@ async function processM3U8Request(
   { id, url, text, isMaster }: Extract<WorkerMessage, { key: 'M3U8Request' }>,
   worker: Worker,
 ): Promise<void> {
-  let processedText = text;
-  try {
-    processedText = isMaster
-      ? proc.handleMasterPlaylist(url, text)
-      : await proc.handleMediaPlaylist(url, text);
-  } catch (err) {
-    trace('worker', 'process-error', { isMaster, err: String(err) });
-  }
-
-  const reply: MainToWorkerMessage = { key: 'M3U8Response', id, text: processedText };
+  const reply: MainToWorkerMessage = { key: 'M3U8Response', id, text: await proc.serve(url, text, isMaster) };
   if (!isMaster) reply.adUrls = proc.getAdSegmentUrls();
   worker.postMessage(reply);
 }

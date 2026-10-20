@@ -299,9 +299,7 @@ console.log(`\nother signals:`);
 console.log(
   `  ad redirects (empty mp4)  fetch ${count('fetch', 'ad-redirect')}  worker ${count('worker', 'ad-redirect')}`,
 );
-console.log(
-  `  process errors            ${count('fetch', 'process-error') + count('worker', 'process-error')}`,
-);
+console.log(`  process errors            ${count('hls', 'process-error')}`);
 console.log(`  worker m3u8 timeouts      ${count('worker', 'm3u8-timeout')}`);
 console.log(`  worker fail-open          ${count('worker', 'fail-open')}`);
 console.log(`  stream evictions          ${count('stream', 'evicted')}`);

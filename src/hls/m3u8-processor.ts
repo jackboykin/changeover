@@ -11,7 +11,7 @@ import {
 } from './m3u8-parser';
 import { BackupStreamManager, mintUsherUrl, SITE_FLAVOR } from './backup-stream';
 import { channelFromUsherUrl, normalizeUrl, urlTail } from '../utils/url';
-import { handBack, hardFlush, setFreshPathMint, switchRendition } from '../player/player';
+import { handBack, hardFlush, switchRendition } from '../player/player';
 import { setBreakActive } from '../player/observer';
 import { trace, digestPlaylist, captureBody, recordBreakSummary } from '../trace';
 
@@ -130,20 +130,32 @@ export class M3U8Processor {
   private segmentCache = new SegmentCache();
   private backupManager: BackupStreamManager;
   private passedThrough = new Set<string>();
-  constructor(getHeaders: () => GQLHeaders, realFetch: typeof fetch) {
+  constructor(
+    private getHeaders: () => GQLHeaders,
+    private realFetch: typeof fetch,
+  ) {
     this.backupManager = new BackupStreamManager(getHeaders, realFetch);
+  }
 
-    setFreshPathMint(async (channelName: string) => {
-      const info = this.streamInfos.get(channelName);
-      if (!info) {
-        trace('player', 'mint', { flavor: 'NO-STREAM-INFO', channel: channelName });
-        return null;
-      }
-      // The full ladder the player already runs: the android floor would strand a 1440p viewer at 360p.
-      const url = await mintUsherUrl(info, getHeaders(), realFetch, SITE_FLAVOR).catch(() => null);
-      trace('player', 'mint', { flavor: url ? 'site' : 'FAILED', channel: channelName });
-      return url;
-    });
+  // The full ladder the player already runs: the android floor would strand a 1440p viewer at 360p.
+  async mintSitePath(channelName: string): Promise<string | null> {
+    const info = this.streamInfos.get(channelName);
+    if (!info) {
+      trace('player', 'mint', { flavor: 'NO-STREAM-INFO', channel: channelName });
+      return null;
+    }
+    const url = await mintUsherUrl(info, this.getHeaders(), this.realFetch, SITE_FLAVOR).catch(() => null);
+    trace('player', 'mint', { flavor: url ? 'site' : 'FAILED', channel: channelName });
+    return url;
+  }
+
+  async serve(url: string, text: string, isMaster: boolean): Promise<string> {
+    try {
+      return isMaster ? this.handleMasterPlaylist(url, text) : await this.handleMediaPlaylist(url, text);
+    } catch (err) {
+      trace('hls', 'process-error', { isMaster, err: String(err) });
+      return text;
+    }
   }
 
   isKnownAdSegment(url: string): boolean {

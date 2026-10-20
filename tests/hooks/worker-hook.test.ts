@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import type { WorkerMessage } from '../../src/types';
-import { installWorkerHook, setWorkerProcessor } from '../../src/hooks/worker-hook';
+import { installWorkerHook } from '../../src/hooks/worker-hook';
+import type { M3U8Processor } from '../../src/hls/m3u8-processor';
 
 type Listener = (event: { data?: unknown }) => void;
 
@@ -106,16 +107,14 @@ describe('worker-hook integration', () => {
       location: { href: 'https://www.twitch.tv/some-channel' },
     };
 
-    installWorkerHook();
+    installWorkerHook({
+      serve: async (_url: string, text: string, isMaster: boolean) =>
+        `${text}\n#${isMaster ? 'master' : 'media'}-processed`,
+      getAdSegmentUrls: () => ['https://ads.example.com/ad.ts'],
+    } as unknown as M3U8Processor);
   });
 
   afterEach(() => {
-    setWorkerProcessor({
-      handleMasterPlaylist: (_url: string, text: string) => text,
-      handleMediaPlaylist: async (_url: string, text: string) => text,
-      getAdSegmentUrls: () => [],
-    } as unknown as Parameters<typeof setWorkerProcessor>[0]);
-
     Object.defineProperty(URL, 'createObjectURL', {
       value: originalCreateObjectURL,
       configurable: true,
@@ -204,12 +203,6 @@ describe('worker-hook integration', () => {
   });
 
   it('routes M3U8Request through processor and posts M3U8Response', async () => {
-    setWorkerProcessor({
-      handleMasterPlaylist: (_url: string, text: string) => `${text}\n#master-processed`,
-      handleMediaPlaylist: async (_url: string, text: string) => `${text}\n#media-processed`,
-      getAdSegmentUrls: () => ['https://ads.example.com/ad.ts'],
-    } as unknown as Parameters<typeof setWorkerProcessor>[0]);
-
     const worker = new g.window!.Worker('https://static.twitch.tv/workers/site.js') as unknown as FakeWorker;
     worker.emit('message', { key: 'WorkerReady' } as WorkerMessage);
 

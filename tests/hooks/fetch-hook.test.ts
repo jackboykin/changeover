@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { getGQLHeaders, installFetchHook, setM3U8Processor } from '../../src/hooks/fetch-hook';
+import { getGQLHeaders, installFetchHook } from '../../src/hooks/fetch-hook';
+import type { M3U8Processor } from '../../src/hls/m3u8-processor';
 import { TWITCH_CLIENT_ID, GQL_URL } from '../../src/utils/constants';
+
+const processor = (serve: M3U8Processor['serve'] = async (_url, text) => text) =>
+  ({ isKnownAdSegment: () => false, serve }) as unknown as M3U8Processor;
 
 describe('installFetchHook integration', () => {
   const g = globalThis as unknown as {
@@ -13,7 +17,6 @@ describe('installFetchHook integration', () => {
   const originalWindow = g.window;
 
   beforeEach(() => {
-    setM3U8Processor(null);
     g.window = {
       fetch: mock(async () => new Response('', { status: 200 })) as unknown as typeof fetch,
       location: { href: 'https://www.twitch.tv/test-channel' },
@@ -21,7 +24,6 @@ describe('installFetchHook integration', () => {
   });
 
   afterEach(() => {
-    setM3U8Processor(null);
     if (originalWindow) {
       g.window = originalWindow;
     } else {
@@ -30,7 +32,7 @@ describe('installFetchHook integration', () => {
   });
 
   it('captures GQL headers and PlaybackAccessToken hash through hooked fetch', async () => {
-    installFetchHook();
+    installFetchHook(processor());
     await g.window!.fetch(GQL_URL, {
       method: 'POST',
       headers: {
@@ -51,7 +53,7 @@ describe('installFetchHook integration', () => {
   });
 
   it('does not capture headers for non-GQL URLs containing "gql"', async () => {
-    installFetchHook();
+    installFetchHook(processor());
     const before = getGQLHeaders().deviceId;
 
     await g.window!.fetch('https://example.com/path?gql=true', {
@@ -68,40 +70,25 @@ describe('installFetchHook integration', () => {
   });
 
   it('routes HLS playlist responses through processor in main-thread interception path', async () => {
-    const handleMasterPlaylist = mock((_: string, __: string) => '#EXTM3U\n#master-processed');
-    const handleMediaPlaylist = mock(async (_: string, __: string) => '#EXTM3U\n#media-processed');
-    setM3U8Processor({
-      isKnownAdSegment: () => false,
-      handleMasterPlaylist,
-      handleMediaPlaylist,
-    } as unknown as Parameters<typeof setM3U8Processor>[0]);
+    const serve = mock(async (_url: string, _text: string, isMaster: boolean) =>
+      isMaster ? '#EXTM3U\n#master-processed' : '#EXTM3U\n#media-processed',
+    );
 
     g.window!.fetch = mock(
       async () => new Response('#EXTM3U\n#original', { status: 200 }),
     ) as unknown as typeof fetch;
-    installFetchHook();
+    installFetchHook(processor(serve));
 
     const masterResp = await g.window!.fetch('https://usher.ttvnw.net/api/channel/hls/streamer.m3u8');
     expect(await masterResp.text()).toContain('#master-processed');
-    expect(handleMasterPlaylist).toHaveBeenCalledTimes(1);
 
     const mediaResp = await g.window!.fetch('https://video-edge.example.com/media-1.m3u8');
     expect(await mediaResp.text()).toContain('#media-processed');
-    expect(handleMediaPlaylist).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns a real fetch that survives being called as a method', async () => {
-    g.window!.fetch = function (this: unknown) {
-      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
-      return Promise.resolve(new Response('ok'));
-    } as unknown as typeof fetch;
-    const holder = { realFetch: installFetchHook() };
-
-    expect(await (await holder.realFetch('https://usher.ttvnw.net/x.m3u8')).text()).toBe('ok');
+    expect(serve).toHaveBeenCalledTimes(2);
   });
 
   it('captures the latest value when a header changes across requests', async () => {
-    installFetchHook();
+    installFetchHook(processor());
     await g.window!.fetch(GQL_URL, {
       method: 'POST',
       headers: { 'X-Device-Id': 'dev-a' },
@@ -118,7 +105,7 @@ describe('installFetchHook integration', () => {
   });
 
   it('captureAccessTokenHash ignores non-PlaybackAccessToken operations', async () => {
-    installFetchHook();
+    installFetchHook(processor());
     const before = getGQLHeaders().accessTokenHash;
 
     await g.window!.fetch(GQL_URL, {
@@ -133,7 +120,7 @@ describe('installFetchHook integration', () => {
   });
 
   it('captureAccessTokenHash tolerates non-JSON body without throwing', async () => {
-    installFetchHook();
+    installFetchHook(processor());
 
     await expect(
       g.window!.fetch(GQL_URL, { method: 'POST', body: 'not-valid-json{' }),
