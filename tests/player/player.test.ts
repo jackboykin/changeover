@@ -8,7 +8,7 @@ const ivsLoad = mock((_url?: string) => {});
 const ivsPlay = mock(() => {});
 const setQuality = mock((_q: IVSQuality) => {});
 const setAutoQualityMode = mock((_on: boolean) => {});
-const STALE_PATH = 'https://usher.ttvnw.net/api/channel/hls/c.m3u8?sig=old&token=old';
+const CURRENT_PATH = 'https://usher.ttvnw.net/api/channel/hls/c.m3u8?sig=old&token=old';
 const FRESH_PATH = 'https://usher.ttvnw.net/api/channel/hls/c.m3u8?sig=new&token=new';
 
 interface FakeQualityState {
@@ -19,7 +19,7 @@ interface FakeQualityState {
 function installFakeDom(
   readyState: number | (() => number),
   quality?: FakeQualityState,
-  path: string = STALE_PATH,
+  path: string = CURRENT_PATH,
 ): { video: { readyState: number }; ivs: Record<string, unknown> } {
   const ivs: Record<string, unknown> = { load: ivsLoad, getPath: () => path, play: ivsPlay };
   if (quality) {
@@ -61,7 +61,20 @@ describe('hardFlush', () => {
     setFreshPathMint(() => Promise.resolve(null));
   });
 
-  it('mints for the channel in the player own path, not the last master seen', async () => {
+  it('reloads the player own path first, without minting a new session', async () => {
+    installFakeDom(4);
+    const mint = mock((_ch: string) => Promise.resolve(FRESH_PATH));
+    setFreshPathMint(mint);
+
+    expect(await hardFlush()).toBe(true);
+
+    expect(mint).not.toHaveBeenCalled();
+    expect(ivsLoad).toHaveBeenCalledTimes(1);
+    expect(ivsLoad).toHaveBeenCalledWith(CURRENT_PATH);
+    expect(ivsPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('mints a retry for the channel in the player own path, not the last master seen', async () => {
     installFakeDom(4, undefined, 'https://usher.ttvnw.net/api/channel/hls/streamerA.m3u8?sig=x');
     const seen: string[] = [];
     setFreshPathMint((ch) => {
@@ -69,7 +82,7 @@ describe('hardFlush', () => {
       return Promise.resolve(`https://usher.ttvnw.net/api/channel/hls/${ch}.m3u8?sig=new`);
     });
 
-    expect(await hardFlush()).toBe(true);
+    expect(await hardFlush(1)).toBe(true);
 
     expect(seen).toEqual(['streamerA']);
     expect(ivsLoad).toHaveBeenCalledWith('https://usher.ttvnw.net/api/channel/hls/streamerA.m3u8?sig=new');
@@ -80,33 +93,22 @@ describe('hardFlush', () => {
     const mint = mock((_ch: string) => Promise.resolve(FRESH_PATH));
     setFreshPathMint(mint);
 
-    expect(await hardFlush()).toBe(true);
+    expect(await hardFlush(1)).toBe(true);
 
     expect(mint).not.toHaveBeenCalled();
     expect(ivsLoad).toHaveBeenCalledWith('blob:https://www.twitch.tv/6f3c1e');
     expect(traceEntries().find((e) => e.ev === 'mint')?.data?.['flavor']).toBe('NO-CHANNEL');
   });
 
-  it('loads a freshly minted path, never the stale one', async () => {
-    installFakeDom(4);
-    setFreshPathMint(() => Promise.resolve(FRESH_PATH));
-
-    expect(await hardFlush()).toBe(true);
-
-    expect(ivsLoad).toHaveBeenCalledTimes(1);
-    expect(ivsLoad).toHaveBeenCalledWith(FRESH_PATH);
-    expect(ivsPlay).toHaveBeenCalledTimes(1);
-  });
-
-  it('falls back to the stale path when minting fails', async () => {
+  it('falls back to the current path when the retry mint fails', async () => {
     installFakeDom(4);
     setFreshPathMint(() => Promise.resolve(null));
 
-    expect(await hardFlush()).toBe(true);
+    expect(await hardFlush(1)).toBe(true);
 
-    expect(ivsLoad).toHaveBeenCalledWith(STALE_PATH);
+    expect(ivsLoad).toHaveBeenCalledWith(CURRENT_PATH);
     const reload = traceEntries().find((e) => e.cat === 'player' && e.ev === 'reload');
-    expect(reload?.data?.['action']).toBe('ivs-load-stale');
+    expect(reload?.data?.['action']).toBe('ivs-load');
   });
 
   it('verifies the flush took and retries exactly once on a dead element', async () => {
@@ -116,7 +118,7 @@ describe('hardFlush', () => {
     await hardFlush();
     for (let i = 0; i < 8; i++) await Promise.resolve();
 
-    expect(ivsLoad).toHaveBeenCalledTimes(2);
+    expect(ivsLoad.mock.calls.map((c) => c[0])).toEqual([CURRENT_PATH, FRESH_PATH]);
     const verdicts = traceEntries()
       .filter((e) => e.cat === 'player' && e.ev === 'flush-verify')
       .map((e) => e.data?.['action']);

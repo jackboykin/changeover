@@ -263,7 +263,7 @@ if (matches.length > 0) {
 
 const reloads = events.filter((e) => e.cat === 'player' && e.ev === 'reload');
 console.log(`\nplayer:`);
-for (const action of ['ivs-load', 'ivs-load-stale', 'ivs-not-found', 'ivs-load-threw']) {
+for (const action of ['ivs-load', 'ivs-load-fresh', 'ivs-not-found', 'ivs-load-threw']) {
   const n = reloads.filter((e) => e.data?.['action'] === action).length;
   if (n > 0) console.log(`  reload → ${action.padEnd(16)} ${n}`);
 }

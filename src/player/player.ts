@@ -61,8 +61,10 @@ export function findIVSPlayer(): IVSPlayer | null {
   return null;
 }
 
-// A stale usher path is Twitch error #5000, and it is silent: load() empties the element without
-// firing an event. So every flush mints a fresh path and polls readyState to confirm it took.
+// A flush reloads the player's own path: a freshly minted one opens a new session, which Twitch
+// greets with another pre-roll. That path can be stale, which is Twitch error #5000 and silent:
+// load() empties the element without an event. So readyState is polled, and a dead flush retries
+// once on a fresh mint.
 let mintFreshPath: ((channelName: string) => Promise<string | null>) | null = null;
 
 export function setFreshPathMint(mint: (channelName: string) => Promise<string | null>): void {
@@ -116,6 +118,19 @@ function verifyFlush(ivs: IVSPlayer, attempt: number, snapshot: QualitySnapshot,
   }, FLUSH_VERIFY_POLL_MS);
 }
 
+async function mintFor(channel: string | null): Promise<string | null> {
+  if (!channel) {
+    trace('player', 'mint', { flavor: 'NO-CHANNEL' });
+    return null;
+  }
+  try {
+    return (await mintFreshPath?.(channel)) ?? null;
+  } catch (err) {
+    trace('player', 'mint-threw', { err: String(err) });
+    return null;
+  }
+}
+
 export async function hardFlush(attempt = 0, snapshot?: QualitySnapshot): Promise<boolean> {
   const ivs = findIVSPlayer();
   if (!ivs) {
@@ -132,25 +147,16 @@ export async function hardFlush(attempt = 0, snapshot?: QualitySnapshot): Promis
     } catch {}
   }
 
-  let stalePath = '';
+  let current = '';
   try {
-    stalePath = ivs.getPath();
+    current = ivs.getPath();
   } catch {}
 
   // Keyed by the player's own channel: a multiview page holds masters for several.
-  const channel = channelFromUsherUrl(stalePath);
-  let fresh: string | null = null;
-  if (mintFreshPath && channel) {
-    try {
-      fresh = await mintFreshPath(channel);
-    } catch (err) {
-      trace('player', 'mint-threw', { err: String(err) });
-    }
-  } else if (!channel) {
-    trace('player', 'mint', { flavor: 'NO-CHANNEL' });
-  }
+  const channel = channelFromUsherUrl(current);
+  const fresh = attempt > 0 || !current ? await mintFor(channel) : null;
 
-  const target = fresh ?? stalePath;
+  const target = fresh ?? current;
   if (!target) {
     trace('player', 'reload', { fullFlush: true, action: 'no-path' });
     return false;
@@ -161,7 +167,7 @@ export async function hardFlush(attempt = 0, snapshot?: QualitySnapshot): Promis
     ivs.play();
     trace('player', 'reload', {
       fullFlush: true,
-      action: fresh ? 'ivs-load' : 'ivs-load-stale',
+      action: fresh ? 'ivs-load-fresh' : 'ivs-load',
       attempt,
       channel,
     });
