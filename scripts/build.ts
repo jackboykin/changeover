@@ -1,3 +1,4 @@
+import { relative } from 'node:path';
 import pkg from '../package.json';
 
 const header = `// ==UserScript==
@@ -24,4 +25,7 @@ const result = await Bun.build({
 if (!result.success) {
   for (const log of result.logs) console.error(log);
   process.exit(1);
+}
+for (const { path, size } of result.outputs) {
+  console.log(`${relative(process.cwd(), path)}  ${(size / 1024).toFixed(1)} KB`);
 }
