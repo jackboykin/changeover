@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import type { GQLHeaders } from '../../src/types';
 
 let flushes = 0;
+const switches: string[] = [];
+let switchable = false;
+let handBacks = 0;
 const breakActiveCalls: boolean[] = [];
 
 mock.module('../../src/player/player', () => ({
@@ -11,6 +14,11 @@ mock.module('../../src/player/player', () => ({
     flushes++;
     return Promise.resolve(true);
   },
+  switchRendition: (to: { codecs: string }) => {
+    switches.push(to.codecs);
+    return switchable ? { prev: { name: '1440p60' }, wasAuto: false } : null;
+  },
+  handBack: () => handBacks++,
 }));
 
 mock.module('../../src/player/observer', () => ({
@@ -86,6 +94,9 @@ function decisions() {
 beforeEach(() => {
   clearTrace();
   flushes = 0;
+  switches.length = 0;
+  switchable = false;
+  handBacks = 0;
   breakActiveCalls.length = 0;
 });
 
@@ -167,6 +178,20 @@ describe('codec seam (flush at the return)', () => {
     await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
 
     expect(flushes).toBe(1);
+  });
+
+  it('hands a seam to the player as a rendition switch, and hands it back with no reload', async () => {
+    switchable = true;
+    const proc = makeProcessor(backupFetch());
+    proc.handleMasterPlaylist(MASTER_URL, HEVC_MASTER);
+    await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
+    await proc.handleMediaPlaylist(HEVC_URL, AD);
+    await proc.handleMediaPlaylist(HEVC_URL, AD);
+    await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
+
+    expect(switches).toEqual(['avc1.64002A,mp4a.40.2']);
+    expect(handBacks).toBe(1);
+    expect(flushes).toBe(0);
   });
 
   it('leaves an HEVC break served from an HEVC backup alone', async () => {

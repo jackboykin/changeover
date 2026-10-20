@@ -6,7 +6,7 @@ import { trace } from '../trace';
 interface Session {
   ladder: StreamVariant[];
   mediaUrl: string;
-  codecs: string;
+  served: StreamVariant;
   acquiredAt: number;
   resolution: string;
   text: string;
@@ -22,7 +22,7 @@ interface Pending {
 interface Acquired {
   ladder: StreamVariant[];
   mediaUrl: string;
-  codecs: string;
+  served: StreamVariant;
   text: string;
   flavor: string;
 }
@@ -141,9 +141,9 @@ export class BackupStreamManager {
     this.backoffs.delete(channelName);
   }
 
-  servedCodecs(channelName: string): string | null {
+  served(channelName: string): StreamVariant | null {
     const session = this.sessions.get(channelName);
-    return session && !('pending' in session) ? session.codecs : null;
+    return session && !('pending' in session) ? session.served : null;
   }
 
   async poll(target: UsherTarget, variant: StreamVariant): Promise<string | null> {
@@ -197,7 +197,7 @@ export class BackupStreamManager {
     const session: Session = {
       ladder: acquired.ladder,
       mediaUrl: acquired.mediaUrl,
-      codecs: acquired.codecs,
+      served: acquired.served,
       acquiredAt: now,
       resolution: variant.resolution,
       text: acquired.text,
@@ -226,7 +226,7 @@ export class BackupStreamManager {
     session.resolution = variant.resolution;
     if (chosen.url === session.mediaUrl) return;
     session.mediaUrl = chosen.url;
-    session.codecs = chosen.codecs;
+    session.served = chosen;
     session.fetchedAt = 0;
   }
 
@@ -320,7 +320,7 @@ export class BackupStreamManager {
         ladder,
         chosen,
         mediaUrl: chosen.url,
-        codecs: chosen.codecs,
+        served: chosen,
         text,
         flavor: flavor.playerType,
         stitched,

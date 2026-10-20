@@ -433,10 +433,10 @@ describe('rendition choice', () => {
   it('keeps the requested video codec when a ladder carries both at one size', async () => {
     fakeNet(DUAL);
     await mgr.poll(channel('streamer'), { ...variant, codecs: 'hev1.1.6.L150,mp4a.40.2' });
-    expect(mgr.servedCodecs('streamer')).toBe('hev1.1.6.L150');
+    expect(mgr.served('streamer')?.codecs).toBe('hev1.1.6.L150');
 
     mgr.release('streamer');
     await mgr.poll(channel('streamer'), variant);
-    expect(mgr.servedCodecs('streamer')).toBe('avc1.64002A');
+    expect(mgr.served('streamer')?.codecs).toBe('avc1.64002A');
   });
 });

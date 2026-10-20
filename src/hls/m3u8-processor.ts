@@ -11,7 +11,7 @@ import {
 } from './m3u8-parser';
 import { BackupStreamManager, mintUsherUrl, SITE_FLAVOR } from './backup-stream';
 import { channelFromUsherUrl, normalizeUrl, urlTail } from '../utils/url';
-import { hardFlush, setFreshPathMint } from '../player/player';
+import { handBack, hardFlush, setFreshPathMint, switchRendition } from '../player/player';
 import { setBreakActive } from '../player/observer';
 import { trace, digestPlaylist, captureBody, recordBreakSummary } from '../trace';
 
@@ -231,9 +231,12 @@ export class M3U8Processor {
       backupHit = backup !== null;
       if (backup !== null) {
         served = backup;
-        // Latched: one poll served in another format than the rendition's own is a seam.
-        const backupCodecs = this.backupManager.servedCodecs(info.channelName) ?? '';
-        if (mediaFormat(backup, backupCodecs) !== mediaFormat(text, variant.codecs)) info.break!.seam = true;
+        const from = this.backupManager.served(info.channelName);
+        const bt = info.break!;
+        if (from && !bt.seam && mediaFormat(backup, from.codecs) !== mediaFormat(text, variant.codecs)) {
+          bt.seam = true;
+          bt.handBack = switchRendition(from);
+        }
       }
     }
 
@@ -280,6 +283,7 @@ export class M3U8Processor {
       startedAt: Date.now(),
       codec,
       seam: false,
+      handBack: null,
       polls: 0,
       backupHits: 0,
       backupMisses: 0,
@@ -290,14 +294,15 @@ export class M3U8Processor {
   }
 
   private closeBreak(info: ChannelStreamInfo, url: string, raw: string): void {
-    const { id, startedAt, ...counts } = info.break!;
+    const { id, startedAt, handBack: rendition, ...counts } = info.break!;
     info.break = null;
     this.backupManager.endBreak(info.channelName);
     this.segmentCache.clear();
 
-    // A seam leaves the player's audio timeline out of sync on the return; a reload resets it.
-    // Twitch serves HEVC as fMP4 and AVC as MPEG-TS, so an AVC backup in an HEVC rendition is one.
-    if (counts.seam) void hardFlush();
+    // A seam leaves the player's audio timeline out of sync on the return. Handing back the
+    // rendition the player left is a switch it handles; a reload resets it when no switch was made.
+    if (rendition) handBack(rendition);
+    else if (counts.seam) void hardFlush();
 
     const now = Date.now();
     const summary = {

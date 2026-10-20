@@ -1,7 +1,7 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
 import type { IVSQuality } from '../../src/types';
 
-const { hardFlush, setFreshPathMint } = await import('../../src/player/player');
+const { hardFlush, setFreshPathMint, switchRendition } = await import('../../src/player/player');
 const { clearTrace, traceEntries } = await import('../../src/trace');
 
 const ivsLoad = mock((_url?: string) => {});
@@ -198,5 +198,58 @@ describe('hardFlush', () => {
     };
     expect(await hardFlush()).toBe(false);
     expect(ivsLoad).not.toHaveBeenCalled();
+  });
+});
+
+describe('switchRendition', () => {
+  const realDocument = globalThis.document;
+  const q1440 = {
+    name: '1440p60',
+    codecs: 'hev1.1.6.L150.90.0.0.0.0.0,mp4a.40.2',
+    width: 2560,
+    height: 1440,
+  };
+  const q360 = { name: '360p30', codecs: 'avc1.4D401F,mp4a.40.2', width: 640, height: 360 };
+
+  function installPlayer(qualities: IVSQuality[]): void {
+    const ivs = {
+      load: ivsLoad,
+      getPath: () => CURRENT_PATH,
+      play: ivsPlay,
+      getQuality: () => q1440,
+      getQualities: () => qualities,
+      isAutoQualityMode: () => false,
+      setQuality,
+    };
+    const fiber = { memoizedProps: { mediaPlayerInstance: ivs }, return: null, child: null, sibling: null };
+    const video = { parentElement: { __reactFiber$test: fiber, parentElement: null } };
+    (globalThis as unknown as { document: unknown }).document = {
+      querySelector: (sel: string) => (sel === 'video' ? video : null),
+    };
+  }
+
+  beforeEach(() => {
+    clearTrace();
+    setQuality.mockClear();
+  });
+
+  afterEach(() => {
+    (globalThis as unknown as { document: unknown }).document = realDocument;
+  });
+
+  it('moves the player onto its rendition with the backup codec and size', () => {
+    installPlayer([q1440, q360]);
+
+    const snapshot = switchRendition({ codecs: 'avc1.42C01E,mp4a.40.2', width: 640, height: 360 });
+
+    expect(setQuality.mock.calls[0]![0]).toBe(q360);
+    expect(snapshot).toEqual({ prev: q1440, wasAuto: false });
+  });
+
+  it('declines when the player has no rendition in that format', () => {
+    installPlayer([q1440]);
+
+    expect(switchRendition({ codecs: 'avc1.42C01E', width: 640, height: 360 })).toBeNull();
+    expect(setQuality).not.toHaveBeenCalled();
   });
 });

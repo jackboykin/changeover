@@ -1,11 +1,7 @@
-import type { IVSPlayer, IVSQuality } from '../types';
+import type { IVSPlayer, IVSQuality, QualitySnapshot } from '../types';
+import { videoCodec } from '../hls/m3u8-parser';
 import { trace } from '../trace';
 import { channelFromUsherUrl } from '../utils/url';
-
-interface QualitySnapshot {
-  prev: IVSQuality | null;
-  wasAuto: boolean | null;
-}
 
 type FiberNode = {
   memoizedProps?: unknown;
@@ -59,6 +55,43 @@ export function findIVSPlayer(): IVSPlayer | null {
     if (node.sibling) stack.push(node.sibling);
   }
   return null;
+}
+
+// Moves the player onto its own rendition in a backup's format, so the seam becomes a rendition
+// switch the player performs and handles itself. Returns what to hand back when the break ends.
+export function switchRendition(target: {
+  codecs: string;
+  width: number;
+  height: number;
+}): QualitySnapshot | null {
+  const ivs = findIVSPlayer();
+  try {
+    const codec = videoCodec(target.codecs);
+    const to = ivs
+      ?.getQualities?.()
+      .find(
+        (q) => videoCodec(q.codecs ?? '') === codec && q.width === target.width && q.height === target.height,
+      );
+    if (!ivs?.setQuality || !to) {
+      trace('player', 'rendition-switch', {
+        action: 'none',
+        want: `${codec} ${target.width}x${target.height}`,
+      });
+      return null;
+    }
+    const snapshot = { prev: ivs.getQuality?.() ?? null, wasAuto: ivs.isAutoQualityMode?.() ?? null };
+    ivs.setQuality(to);
+    trace('player', 'rendition-switch', { action: 'switched', from: snapshot.prev?.name, to: to.name });
+    return snapshot;
+  } catch (err) {
+    trace('player', 'rendition-switch', { action: 'threw', err: String(err) });
+    return null;
+  }
+}
+
+export function handBack(snapshot: QualitySnapshot): void {
+  const ivs = findIVSPlayer();
+  if (ivs) restoreQuality(ivs, snapshot);
 }
 
 // A flush reloads the player's own path: a freshly minted one opens a new session, which Twitch

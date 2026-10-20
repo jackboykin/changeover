@@ -11,6 +11,8 @@ mock.module('../../src/player/player', () => ({
   findIVSPlayer: () => (ivsAvailable ? { load: ivsLoad, getPath: () => '/live/path', play: ivsPlay } : null),
   setFreshPathMint: () => {},
   hardFlush: hardFlushMock,
+  switchRendition: () => null,
+  handBack: () => {},
 }));
 
 const { installObserver, gapJumpTarget, setBreakActive, sample } = await import('../../src/player/observer');

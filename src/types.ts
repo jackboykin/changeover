@@ -26,11 +26,17 @@ export interface ChannelStreamInfo {
   break: AdBreak | null;
 }
 
+export interface QualitySnapshot {
+  prev: IVSQuality | null;
+  wasAuto: boolean | null;
+}
+
 interface AdBreak {
   id: number;
   startedAt: number;
   codec: string;
   seam: boolean;
+  handBack: QualitySnapshot | null;
   polls: number;
   backupHits: number;
   backupMisses: number;
@@ -50,6 +56,9 @@ export interface MainToWorkerMessage {
 
 export interface IVSQuality {
   name?: string;
+  codecs?: string;
+  width?: number;
+  height?: number;
   [key: string]: unknown;
 }
 
@@ -58,6 +67,7 @@ export interface IVSPlayer {
   getPath: () => string;
   play: () => void;
   getQuality?: () => IVSQuality | null | undefined;
+  getQualities?: () => IVSQuality[];
   setQuality?: (quality: IVSQuality, adaptive?: boolean) => void;
   isAutoQualityMode?: () => boolean;
   setAutoQualityMode?: (enabled: boolean) => void;
