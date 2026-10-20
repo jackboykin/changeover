@@ -16,7 +16,6 @@ import { setBreakActive } from '../player/observer';
 import { trace, digestPlaylist, captureBody, recordBreakSummary } from '../trace';
 
 const STREAM_INFO_TTL_MS = 15 * 60_000;
-const STREAM_INFO_MAX_ENTRIES = 12;
 const AD_REPLACEMENT_URL = 'https://twitch.tv';
 const PREFETCH_TAG = '#EXT-X-TWITCH-PREFETCH:';
 const PRELOAD_HINT_TAG = '#EXT-X-PRELOAD-HINT:';
@@ -93,7 +92,7 @@ export class M3U8Processor {
   private streamInfos = new Map<string, ChannelStreamInfo>();
   private streamByUrl = new Map<string, ChannelStreamInfo>();
   private backupManager: BackupStreamManager;
-  private passedThrough = new Set<string>();
+
   constructor(
     private getHeaders: () => GQLHeaders,
     private realFetch: typeof fetch,
@@ -168,16 +167,20 @@ export class M3U8Processor {
     const mediaUrl = normalizeUrl(url);
     const info = this.streamByUrl.get(mediaUrl);
     if (!info) {
-      this.notePassthrough(mediaUrl);
+      trace('poll', 'passthrough', { url: urlTail(mediaUrl) });
       return text;
     }
     info.lastSeenAt = Date.now();
 
-    return this.process(mediaUrl, text, info);
+    return this.process(mediaUrl, text, info, info.variants[mediaUrl]!);
   }
 
-  private async process(url: string, text: string, info: ChannelStreamInfo): Promise<string> {
-    const variant = info.variants[url];
+  private async process(
+    url: string,
+    text: string,
+    info: ChannelStreamInfo,
+    variant: StreamVariant,
+  ): Promise<string> {
     const rawDigest = digestPlaylist(text);
     const inAd = text.includes(AD_SIGNIFIER);
 
@@ -190,7 +193,7 @@ export class M3U8Processor {
     let backupHit = false;
     let backupMs = 0;
 
-    if (inAd && variant) {
+    if (inAd) {
       const startedAt = Date.now();
       const backup = await this.backupManager.poll(info, variant);
       backupMs = Date.now() - startedAt;
@@ -226,7 +229,7 @@ export class M3U8Processor {
       breakId: bt?.id ?? null,
       channel: info.channelName,
       url: urlTail(url, 32),
-      codec: variant?.codecs ?? null,
+      codec: variant.codecs,
       digest: rawDigest,
       inAd,
       backup: inAd ? { hit: backupHit, ms: backupMs } : null,
@@ -237,13 +240,8 @@ export class M3U8Processor {
     return served;
   }
 
-  private openBreak(
-    info: ChannelStreamInfo,
-    variant: StreamVariant | undefined,
-    url: string,
-    raw: string,
-  ): void {
-    const codec = variant?.codecs ?? 'unknown';
+  private openBreak(info: ChannelStreamInfo, variant: StreamVariant, url: string, raw: string): void {
+    const codec = variant.codecs;
     info.break = {
       id: nextBreakId++,
       startedAt: Date.now(),
@@ -285,37 +283,14 @@ export class M3U8Processor {
     setBreakActive(false);
   }
 
-  private notePassthrough(url: string): void {
-    if (this.passedThrough.has(url)) return;
-    if (this.passedThrough.size >= 64) this.passedThrough.clear();
-    this.passedThrough.add(url);
-    trace('media', 'passthrough', { url: urlTail(url) });
-  }
-
   private evictStaleStreams(): void {
     const now = Date.now();
-
     for (const [channelName, info] of this.streamInfos) {
-      if (now - info.lastSeenAt > STREAM_INFO_TTL_MS) this.removeStreamInfo(channelName, info, 'ttl');
+      if (now - info.lastSeenAt <= STREAM_INFO_TTL_MS) continue;
+      trace('stream', 'evicted', { channel: channelName, inBreak: info.break !== null });
+      for (const url of Object.keys(info.variants)) this.streamByUrl.delete(url);
+      this.backupManager.release(channelName);
+      this.streamInfos.delete(channelName);
     }
-
-    while (this.streamInfos.size > STREAM_INFO_MAX_ENTRIES) {
-      let oldestKey = '';
-      let oldestTime = Infinity;
-      for (const [k, v] of this.streamInfos) {
-        if (v.lastSeenAt < oldestTime) {
-          oldestKey = k;
-          oldestTime = v.lastSeenAt;
-        }
-      }
-      this.removeStreamInfo(oldestKey, this.streamInfos.get(oldestKey)!, 'cap');
-    }
-  }
-
-  private removeStreamInfo(channelName: string, info: ChannelStreamInfo, reason: string): void {
-    trace('stream', 'evicted', { channel: channelName, reason, inBreak: info.break !== null });
-    for (const url of Object.keys(info.variants)) this.streamByUrl.delete(url);
-    this.backupManager.release(channelName);
-    this.streamInfos.delete(channelName);
   }
 }

@@ -304,13 +304,18 @@ console.log(`  worker m3u8 timeouts      ${count('worker', 'm3u8-timeout')}`);
 console.log(`  worker fail-open          ${count('worker', 'fail-open')}`);
 console.log(`  stream evictions          ${count('stream', 'evicted')}`);
 console.log(`  workers not intercepted   ${count('worker', 'not-intercepted')}`);
-const passthrough = events.filter((e) => e.cat === 'media' && e.ev === 'passthrough');
+const passthrough = [
+  ...new Set(
+    events.filter((e) => e.cat === 'poll' && e.ev === 'passthrough').map((e) => String(e.data?.['url'])),
+  ),
+];
 const unmatched = events.filter((e) => e.cat === 'master' && e.ev === 'unmatched');
 if (passthrough.length + unmatched.length > 0) {
   console.log(
     `  unattributed playlists    ${unmatched.length} master, ${passthrough.length} media (served untouched)`,
   );
-  for (const e of [...unmatched, ...passthrough]) console.log(`    ${e.cat}  ${String(e.data?.['url'])}`);
+  for (const e of unmatched) console.log(`    master  ${String(e.data?.['url'])}`);
+  for (const url of passthrough) console.log(`    media   ${url}`);
 }
 
 const hintPolls = decisions.filter((e) => {
