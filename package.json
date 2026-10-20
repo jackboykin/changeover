@@ -1,6 +1,6 @@
 {
   "name": "changeover",
-  "version": "3.0",
+  "version": "0.1.0",
   "description": "Blocks ads on Twitch.",
   "homepage": "https://github.com/jackboykin/changeover",
   "license": "MIT",
