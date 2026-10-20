@@ -1,4 +1,5 @@
 import { version } from '../package.json';
+import { headerInt, MEDIA_SEQUENCE_TAG } from './hls/m3u8-parser';
 import { AD_SIGNIFIER } from './utils/constants';
 import { urlShape } from './utils/url';
 
@@ -78,7 +79,7 @@ export function digestPlaylist(text: string) {
     preloadHints: 0,
     parts: 0,
     discontinuities: 0,
-    mediaSeq: null as number | null,
+    mediaSeq: headerInt(text, MEDIA_SEQUENCE_TAG),
   };
 
   for (const line of text.split('\n')) {
@@ -93,9 +94,6 @@ export function digestPlaylist(text: string) {
       digest.parts++;
     } else if (line.startsWith('#EXT-X-DISCONTINUITY')) {
       digest.discontinuities++;
-    } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
-      const n = parseInt(line.slice('#EXT-X-MEDIA-SEQUENCE:'.length), 10);
-      if (!Number.isNaN(n)) digest.mediaSeq = n;
     }
   }
 

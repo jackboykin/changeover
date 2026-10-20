@@ -3,13 +3,16 @@ import type { StreamVariant } from '../types';
 export const MEDIA_SEQUENCE_TAG = '#EXT-X-MEDIA-SEQUENCE:';
 export const LIVE_SEQUENCE_TAG = '#EXT-X-TWITCH-LIVE-SEQUENCE:';
 
+const DIGITS = /\d+/uy;
+
 // Header only: a stitched playlist repeats LIVE-SEQUENCE inline, after its ads.
 export function headerInt(text: string, tag: string): number | null {
-  const idx = text.indexOf(tag);
+  const at = text.indexOf(tag);
   const firstSegment = text.indexOf('#EXTINF');
-  if (idx === -1 || (firstSegment !== -1 && idx > firstSegment)) return null;
-  const n = parseInt(text.slice(idx + tag.length, idx + tag.length + 20), 10);
-  return Number.isNaN(n) ? null : n;
+  if (at === -1 || (firstSegment !== -1 && at > firstSegment)) return null;
+  DIGITS.lastIndex = at + tag.length;
+  const digits = DIGITS.exec(text);
+  return digits ? Number(digits[0]) : null;
 }
 
 const AUDIO_CODEC = /^(mp4a|ac-3|ec-3|opus|flac)/u;
