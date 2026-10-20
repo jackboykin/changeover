@@ -186,55 +186,50 @@ export class M3U8Processor {
 
     if (!inAd && info.break) this.closeBreak(info, variant, text);
 
-    let served = text;
-    let backupHit = false;
-    let backupMs = 0;
+    const poll = inAd ? await this.serveBreak(text, info, variant) : null;
+    const served = liveNumbered(poll?.served ?? text);
+    if (opened && poll?.hit === true) captureBody('break-served', renditionName(variant), served);
 
-    if (inAd) {
-      const startedAt = Date.now();
-      const backup = await this.backupManager.poll(info, variant);
-      backupMs = Date.now() - startedAt;
-      backupHit = backup !== null;
-      if (backup !== null) {
-        served = backup;
-        const from = this.backupManager.served(info.channelName);
-        const bt = info.break!;
-        if (from && !bt.seam && mediaFormat(backup, from.codecs) !== mediaFormat(text, variant.codecs)) {
-          bt.seam = true;
-          bt.handBack = switchRendition(from);
-        }
-      }
-    }
-
-    let marked = 0;
-    if (inAd && !backupHit) {
-      const result = markAdSegments(served, this.adSegments);
-      served = result.text;
-      marked = result.marked;
-    }
-
-    served = liveNumbered(served);
-    if (opened && backupHit) captureBody('break-served', renditionName(variant), served);
-
-    const bt = info.break;
-    if (bt) {
-      bt.polls++;
-      if (backupHit) bt.backupHits++;
-      else bt.backupMisses++;
-    }
     trace('poll', 'decision', {
-      breakId: bt?.id ?? null,
+      breakId: info.break?.id ?? null,
       channel: info.channelName,
       rendition: renditionName(variant),
       codec: variant.codecs,
       digest: rawDigest,
       inAd,
-      backup: inAd ? { hit: backupHit, ms: backupMs } : null,
-      served: backupHit ? digestPlaylist(served) : null,
-      markedSegments: marked,
+      backup: poll ? { hit: poll.hit, ms: poll.ms } : null,
+      served: poll?.hit === true ? digestPlaylist(served) : null,
+      markedSegments: poll?.marked ?? 0,
     });
 
     return served;
+  }
+
+  // The backup when one is ready, else the original with its ads marked for empty video.
+  private async serveBreak(
+    text: string,
+    info: ChannelStreamInfo,
+    variant: StreamVariant,
+  ): Promise<{ served: string; hit: boolean; ms: number; marked: number }> {
+    const bt = info.break!;
+    const startedAt = Date.now();
+    const backup = await this.backupManager.poll(info, variant);
+    const ms = Date.now() - startedAt;
+    bt.polls++;
+
+    if (backup === null) {
+      bt.backupMisses++;
+      const result = markAdSegments(text, this.adSegments);
+      return { served: result.text, hit: false, ms, marked: result.marked };
+    }
+
+    bt.backupHits++;
+    const from = this.backupManager.served(info.channelName);
+    if (from && !bt.seam && mediaFormat(backup, from.codecs) !== mediaFormat(text, variant.codecs)) {
+      bt.seam = true;
+      bt.handBack = switchRendition(from);
+    }
+    return { served: backup, hit: true, ms, marked: 0 };
   }
 
   private openBreak(info: ChannelStreamInfo, variant: StreamVariant, raw: string): void {
