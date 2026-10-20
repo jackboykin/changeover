@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "oxc",
-    "import"
-  ],
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
   "categories": {
     "correctness": "error",
     "suspicious": "error",
@@ -42,9 +37,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "scripts/analyze-trace.ts"
-      ],
+      "files": ["scripts/analyze-trace.ts"],
       "rules": {
         "typescript/restrict-template-expressions": "off",
         "typescript/no-base-to-string": "off",
@@ -52,9 +45,7 @@
       }
     },
     {
-      "files": [
-        "tests/**"
-      ],
+      "files": ["tests/**"],
       "rules": {
         "no-await-in-loop": "off",
         "typescript/no-base-to-string": "off",
@@ -63,9 +54,7 @@
       }
     },
     {
-      "files": [
-        "tests/hooks/worker-inject.test.ts"
-      ],
+      "files": ["tests/hooks/worker-inject.test.ts"],
       "rules": {
         "typescript/no-implied-eval": "off",
         "typescript/no-unsafe-call": "off",

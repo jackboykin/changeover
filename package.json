@@ -2,23 +2,23 @@
   "name": "changeover",
   "version": "3.0",
   "description": "Blocks ads on Twitch.",
-  "author": "jackboykin",
   "homepage": "https://github.com/jackboykin/changeover",
   "license": "MIT",
+  "author": "jackboykin",
   "type": "module",
   "scripts": {
     "build": "bun run scripts/build.ts",
     "typecheck": "bun tsc --noEmit",
     "test": "bun test",
     "lint": "oxlint src tests scripts",
-    "format": "prettier --check src tests scripts",
-    "format:write": "prettier --write src tests scripts"
+    "format": "oxfmt --check",
+    "format:write": "oxfmt"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "oxfmt": "0.74.0",
     "oxlint": "^1.89.0",
     "oxlint-tsgolint": "^7.0.2004",
-    "prettier": "^3.8.3",
     "typescript": "^7.0.2"
   }
 }
