@@ -1,4 +1,4 @@
-# Changeover
+# changeover
 
 A userscript that removes ads from Twitch.
 

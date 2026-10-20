@@ -2,7 +2,7 @@ import { relative } from 'node:path';
 import pkg from '../package.json';
 
 const header = `// ==UserScript==
-// @name         Changeover
+// @name         changeover
 // @namespace    ${pkg.homepage}
 // @version      ${pkg.version}
 // @description  ${pkg.description}
