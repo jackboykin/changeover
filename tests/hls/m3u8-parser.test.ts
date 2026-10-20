@@ -1,21 +1,7 @@
 import { describe, it, expect } from 'bun:test';
-import {
-  splitLines,
-  parseAttributes,
-  parseMasterPlaylist,
-  videoCodec,
-  mediaFormat,
-} from '../../src/hls/m3u8-parser';
+import { parseAttributes, parseMasterPlaylist, videoCodec, mediaFormat } from '../../src/hls/m3u8-parser';
 
-describe('splitLines', () => {
-  it('splits on newlines', () => {
-    expect(splitLines('a\nb\nc')).toEqual(['a', 'b', 'c']);
-  });
-
-  it('handles CRLF', () => {
-    expect(splitLines('a\r\nb\r\nc')).toEqual(['a', 'b', 'c']);
-  });
-});
+const MASTER_URL = 'https://usher.ttvnw.net/api/channel/hls/streamer.m3u8';
 
 describe('parseAttributes', () => {
   it('parses key-value pairs', () => {
@@ -42,24 +28,24 @@ describe('parseMasterPlaylist', () => {
   ].join('\n');
 
   it('parses all variants', () => {
-    const variants = parseMasterPlaylist(sampleMaster);
+    const variants = parseMasterPlaylist(sampleMaster, MASTER_URL);
     expect(variants).toHaveLength(3);
   });
 
   it('extracts resolution correctly', () => {
-    const variants = parseMasterPlaylist(sampleMaster);
+    const variants = parseMasterPlaylist(sampleMaster, MASTER_URL);
     expect(variants[0]!.resolution).toBe('1920x1080');
     expect(variants[0]!.width).toBe(1920);
     expect(variants[0]!.height).toBe(1080);
   });
 
   it('extracts codecs', () => {
-    const variants = parseMasterPlaylist(sampleMaster);
+    const variants = parseMasterPlaylist(sampleMaster, MASTER_URL);
     expect(variants[0]!.codecs).toBe('avc1.4D401F,mp4a.40.2');
   });
 
   it('extracts URLs', () => {
-    const variants = parseMasterPlaylist(sampleMaster);
+    const variants = parseMasterPlaylist(sampleMaster, MASTER_URL);
     expect(variants[0]!.url).toBe('https://video.twitch.tv/v1/1080p30.m3u8');
     expect(variants[1]!.url).toBe('https://video.twitch.tv/v1/720p30.m3u8');
   });
@@ -72,7 +58,7 @@ describe('parseMasterPlaylist', () => {
       '#EXT-X-STREAM-INF:BANDWIDTH=3000000,CODECS="avc1.4D401E",RESOLUTION=1280x720,FRAME-RATE=30.000',
       'https://video.twitch.tv/v1/720p30.m3u8',
     ].join('\n');
-    const variants = parseMasterPlaylist(malformed);
+    const variants = parseMasterPlaylist(malformed, MASTER_URL);
     expect(variants).toHaveLength(1);
     expect(variants[0]!.resolution).toBe('1280x720');
   });

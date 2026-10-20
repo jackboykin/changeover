@@ -2,7 +2,6 @@ import type { GQLHeaders, ChannelStreamInfo, StreamVariant } from '../types';
 import { AD_SIGNIFIER, AD_SEGMENT_URL_PATTERNS } from '../utils/constants';
 import {
   parseMasterPlaylist,
-  splitLines,
   headerInt,
   MEDIA_SEQUENCE_TAG,
   LIVE_SEQUENCE_TAG,
@@ -73,7 +72,7 @@ function extractUriAttr(line: string): string {
 // Low-latency hints are blanked, since the player fetches them before reading any #EXTINF.
 export function markAdSegments(text: string, cache: SegmentCache): { text: string; marked: number } {
   const hasTracking = text.includes('X-TV-TWITCH-AD-');
-  const lines = splitLines(text);
+  const lines = text.split(/\r?\n/);
   const lastIdx = lines.length - 1;
   let marked = 0;
   let changed = hasTracking;
@@ -193,11 +192,9 @@ export class M3U8Processor {
     };
     this.streamInfos.set(channelName, info);
 
-    for (const variant of parseMasterPlaylist(text)) {
-      const resolved = new URL(variant.url, masterUrl).href;
-      variant.url = resolved;
-      info.variants[resolved] = variant;
-      this.streamByUrl.set(resolved, info);
+    for (const variant of parseMasterPlaylist(text, masterUrl)) {
+      info.variants[variant.url] = variant;
+      this.streamByUrl.set(variant.url, info);
     }
 
     trace('master', 'handled', {

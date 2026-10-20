@@ -307,7 +307,7 @@ export class BackupStreamManager {
       const masterResp = await this.realFetch(masterUrl);
       if (masterResp.status !== 200) return null;
 
-      const ladder = parseLadder(await masterResp.text(), masterUrl);
+      const ladder = parseMasterPlaylist(await masterResp.text(), masterUrl);
       const chosen = pickVariant(ladder, variant);
       if (!chosen) return null;
 
@@ -347,12 +347,6 @@ export class BackupStreamManager {
       untilMs: backoff.until - Date.now(),
     });
   }
-}
-
-function parseLadder(masterM3u8: string, masterUrl: string): StreamVariant[] {
-  const ladder = parseMasterPlaylist(masterM3u8);
-  for (const v of ladder) v.url = new URL(v.url, masterUrl).href;
-  return ladder;
 }
 
 // The rendition nearest the target: size first, then frame rate, then video codec, so a ladder
