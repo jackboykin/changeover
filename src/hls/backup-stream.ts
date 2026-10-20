@@ -6,6 +6,7 @@ import { trace } from '../trace';
 interface Session {
   ladder: StreamVariant[];
   mediaUrl: string;
+  hevc: boolean;
   acquiredAt: number;
   resolution: string;
   text: string;
@@ -21,6 +22,7 @@ interface Pending {
 interface Acquired {
   ladder: StreamVariant[];
   mediaUrl: string;
+  hevc: boolean;
   text: string;
   flavor: string;
 }
@@ -139,6 +141,11 @@ export class BackupStreamManager {
     this.backoffs.delete(channelName);
   }
 
+  servesHEVC(channelName: string): boolean | null {
+    const session = this.sessions.get(channelName);
+    return session && !('pending' in session) ? session.hevc : null;
+  }
+
   async poll(target: UsherTarget, variant: StreamVariant): Promise<string | null> {
     const { channelName } = target;
     const existing = this.sessions.get(channelName);
@@ -190,6 +197,7 @@ export class BackupStreamManager {
     const session: Session = {
       ladder: acquired.ladder,
       mediaUrl: acquired.mediaUrl,
+      hevc: acquired.hevc,
       acquiredAt: now,
       resolution: variant.resolution,
       text: acquired.text,
@@ -218,6 +226,7 @@ export class BackupStreamManager {
     session.resolution = variant.resolution;
     if (chosen.url === session.mediaUrl) return;
     session.mediaUrl = chosen.url;
+    session.hevc = chosen.isHEVC;
     session.fetchedAt = 0;
   }
 
@@ -307,7 +316,15 @@ export class BackupStreamManager {
       const text = await mediaResp.text();
 
       const stitched = text.includes(AD_SIGNIFIER);
-      return { ladder, chosen, mediaUrl: chosen.url, text, flavor: flavor.playerType, stitched };
+      return {
+        ladder,
+        chosen,
+        mediaUrl: chosen.url,
+        hevc: chosen.isHEVC,
+        text,
+        flavor: flavor.playerType,
+        stitched,
+      };
     } catch (err) {
       trace('backup', 'flavor-error', {
         channel: target.channelName,

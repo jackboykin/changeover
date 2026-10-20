@@ -218,9 +218,6 @@ export class M3U8Processor {
     const opened = inAd && !info.break;
     if (opened) this.openBreak(info, variant, url, text);
 
-    // Latched: ABR can climb into HEVC mid-break.
-    if (inAd && variant?.isHEVC) info.break!.isHEVC = true;
-
     if (!inAd && info.break) this.closeBreak(info, url, text);
 
     let served = text;
@@ -232,7 +229,11 @@ export class M3U8Processor {
       const backup = await this.backupManager.poll(info, variant);
       backupMs = Date.now() - startedAt;
       backupHit = backup !== null;
-      if (backup !== null) served = backup;
+      if (backup !== null) {
+        served = backup;
+        // Latched: one poll of AVC backup inside an HEVC rendition, or the reverse, is a seam.
+        if (this.backupManager.servesHEVC(info.channelName) !== variant.isHEVC) info.break!.seam = true;
+      }
     }
 
     let marked = 0;
@@ -279,6 +280,7 @@ export class M3U8Processor {
       startedAt: Date.now(),
       codec,
       isHEVC,
+      seam: false,
       polls: 0,
       backupHits: 0,
       backupMisses: 0,
@@ -294,8 +296,9 @@ export class M3U8Processor {
     this.backupManager.endBreak(info.channelName);
     this.segmentCache.clear();
 
-    // An AVC backup leaves HEVC source buffers out of audio sync; a flush resets them.
-    if (counts.isHEVC) void hardFlush();
+    // Twitch serves HEVC as fMP4 and AVC as MPEG-TS. Swapping one into the other's rendition
+    // leaves the player's audio timeline out of sync on the return; a reload resets it.
+    if (counts.seam) void hardFlush();
 
     const now = Date.now();
     const summary = {

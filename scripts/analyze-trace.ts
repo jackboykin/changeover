@@ -57,7 +57,7 @@ for (const start of events.filter((e) => e.cat === 'break' && e.ev === 'start'))
       ].filter(Boolean);
       line = `poll     ${bits.join('  ')}`;
     } else if (e.cat === 'break' && e.ev === 'end') {
-      line = `break    end  polls=${d['polls']} hits=${d['backupHits']} misses=${d['backupMisses']} hevc=${d['isHEVC']}`;
+      line = `break    end  polls=${d['polls']} hits=${d['backupHits']} misses=${d['backupMisses']} hevc=${d['isHEVC']} seam=${d['seam']}`;
     } else if (e.cat === 'backup' && e.ev === 'variant-match') {
       const tag = d['exact'] ? 'exact' : 'DOWNGRADE';
       line = `backup   variant-match  ${tag}  want ${d['target']}${d['targetHEVC'] ? ' HEVC' : ''} → ${d['chosen']}  [${d['offered']}]`;

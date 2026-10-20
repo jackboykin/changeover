@@ -60,7 +60,7 @@ const BACKUP = ['#EXTM3U', '#EXT-X-MEDIA-SEQUENCE:5000', '#EXTINF:2.000,live', '
 
 const DISCONTINUITY = '#EXT-X-DISCONTINUITY';
 
-function backupFetch(mediaBody = BACKUP): typeof fetch {
+function backupFetch(mediaBody = BACKUP, master = AVC_MASTER): typeof fetch {
   return mock((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes('gql')) {
@@ -68,7 +68,7 @@ function backupFetch(mediaBody = BACKUP): typeof fetch {
         Response.json({ data: { streamPlaybackAccessToken: { signature: 'sig', value: 'tok' } } }),
       );
     }
-    if (url.includes('usher')) return Promise.resolve(new Response(AVC_MASTER));
+    if (url.includes('usher')) return Promise.resolve(new Response(master));
     return Promise.resolve(new Response(mediaBody));
   }) as unknown as typeof fetch;
 }
@@ -158,8 +158,8 @@ describe('live numbering', () => {
   });
 });
 
-describe('HEVC ad break (flush belt at the return)', () => {
-  it('fires the IVS full flush at break end (the 1440p desync belt)', async () => {
+describe('codec seam (flush at the return)', () => {
+  it('flushes after an HEVC break served from an AVC backup', async () => {
     const proc = makeProcessor(backupFetch());
     proc.handleMasterPlaylist(MASTER_URL, HEVC_MASTER);
     await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
@@ -169,7 +169,17 @@ describe('HEVC ad break (flush belt at the return)', () => {
     expect(flushes).toBe(1);
   });
 
-  it('fires the full flush for an HEVC PRE-ROLL too', async () => {
+  it('leaves an HEVC break served from an HEVC backup alone', async () => {
+    const proc = makeProcessor(backupFetch(BACKUP, HEVC_MASTER));
+    proc.handleMasterPlaylist(MASTER_URL, HEVC_MASTER);
+    await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
+    expect(await proc.handleMediaPlaylist(HEVC_URL, AD)).toBe(BACKUP);
+    await proc.handleMediaPlaylist(HEVC_URL, CLEAN);
+
+    expect(flushes).toBe(0);
+  });
+
+  it('flushes after an HEVC pre-roll served from an AVC backup', async () => {
     const proc = makeProcessor(backupFetch());
     proc.handleMasterPlaylist(MASTER_URL, HEVC_MASTER);
     await proc.handleMediaPlaylist(HEVC_URL, AD);
@@ -283,7 +293,7 @@ describe('regressions', () => {
     expect(flushes).toBe(1);
   });
 
-  it('latches the HEVC flag when ABR climbs into HEVC mid-break', async () => {
+  it('latches the seam when ABR climbs into HEVC mid-break', async () => {
     const HEVC_MIXED = [
       '#EXTM3U',
       '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A"',

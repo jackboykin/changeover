@@ -32,6 +32,7 @@ interface AdBreak {
   startedAt: number;
   codec: string;
   isHEVC: boolean;
+  seam: boolean;
   polls: number;
   backupHits: number;
   backupMisses: number;
