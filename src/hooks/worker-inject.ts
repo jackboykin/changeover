@@ -1,8 +1,8 @@
 import { EMPTY_MP4_DATA_URI } from '../utils/constants';
-import { classifyHlsUrl, urlTail } from '../utils/url';
+import { classifyHlsUrl, urlShape } from '../utils/url';
 
 // Runs in the worker from its source text, so it can only use its arguments.
-function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, tail: typeof urlTail): void {
+function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, shape: typeof urlShape): void {
   const ws = self as unknown as {
     addEventListener(type: 'message', listener: (e: MessageEvent) => void): void;
     postMessage(data: unknown): void;
@@ -33,7 +33,7 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, tail: typ
       const id = 'r' + ++nextRequestId;
       const timer = setTimeout(() => {
         if (pendingM3U8Requests.delete(id)) {
-          traceUp('m3u8-timeout', { isMaster, url: tail(url, 32) });
+          traceUp('m3u8-timeout', { isMaster, url: shape(url) });
           resolve(text);
         }
       }, 10000);
@@ -51,7 +51,7 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, tail: typ
     const url = rawUrl.trimEnd();
 
     if (adSegmentUrls.has(url)) {
-      traceUp('ad-redirect', { url: url.substring(0, 160) });
+      traceUp('ad-redirect', { url: shape(url) });
       return realFetch(emptyMp4, options);
     }
 
@@ -60,7 +60,7 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, tail: typ
 
     const response = await realFetch(typeof urlArg === 'string' ? url : urlArg, options);
     if (response.status !== 200) {
-      traceUp('hls-status', { isMaster, status: response.status, url: tail(url) });
+      traceUp('hls-status', { isMaster, status: response.status, url: shape(url) });
       return response;
     }
 
@@ -80,5 +80,5 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, tail: typ
 }
 
 export function buildWorkerInjectionCode(): string {
-  return `(${workerMain})(${JSON.stringify(EMPTY_MP4_DATA_URI)}, ${classifyHlsUrl}, ${urlTail});`;
+  return `(${workerMain})(${JSON.stringify(EMPTY_MP4_DATA_URI)}, ${classifyHlsUrl}, ${urlShape});`;
 }

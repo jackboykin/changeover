@@ -6,9 +6,11 @@ export function normalizeUrl(url: string): string {
   }
 }
 
-export function urlTail(url: string, chars = 48): string {
-  const path = url.split('?')[0]!;
-  return path.substring(Math.max(0, path.length - chars));
+// A URL cut to its host and file type, which tells playlists and segments apart in a trace
+// without the signed path and query that name the viewing session.
+export function urlShape(url: string): string {
+  const m = /^\w+:\/\/([^/?#]+)[^?#]*?(\.\w+)?(?:[?#].*)?$/.exec(url);
+  return m ? `${m[1]}/…${m[2] ?? ''}` : '…';
 }
 
 export function classifyHlsUrl(url: string): { isHls: boolean; isMaster: boolean } {

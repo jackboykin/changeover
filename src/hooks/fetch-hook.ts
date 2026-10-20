@@ -1,7 +1,7 @@
 import type { GQLHeaders } from '../types';
 import { TWITCH_CLIENT_ID, EMPTY_MP4_DATA_URI, GQL_URL } from '../utils/constants';
 import type { M3U8Processor } from '../hls/m3u8-processor';
-import { normalizeUrl, classifyHlsUrl, urlTail } from '../utils/url';
+import { normalizeUrl, classifyHlsUrl, urlShape } from '../utils/url';
 import { trace } from '../trace';
 
 const gqlHeaders: GQLHeaders = {
@@ -33,7 +33,7 @@ export function installFetchHook(processor: M3U8Processor): void {
     }
 
     if (processor.adSegments.has(rawUrl)) {
-      trace('fetch', 'ad-redirect', { url: rawUrl.substring(0, 160) });
+      trace('fetch', 'ad-redirect', { url: urlShape(rawUrl) });
       return realFetch(EMPTY_MP4_DATA_URI);
     }
 
@@ -42,7 +42,7 @@ export function installFetchHook(processor: M3U8Processor): void {
 
     return realFetch.call(this, input, init).then(async (resp: Response) => {
       if (resp.status !== 200) {
-        trace('fetch', 'hls-status', { isMaster, status: resp.status, url: urlTail(url) });
+        trace('fetch', 'hls-status', { isMaster, status: resp.status, url: urlShape(url) });
         return resp;
       }
       const processed = await processor.serve(url, await resp.text(), isMaster);

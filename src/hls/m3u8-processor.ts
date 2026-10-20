@@ -10,7 +10,7 @@ import {
   videoCodec,
 } from './m3u8-parser';
 import { BackupStreamManager, mintUsherUrl, SITE_FLAVOR } from './backup-stream';
-import { channelFromUsherUrl, normalizeUrl, urlTail } from '../utils/url';
+import { channelFromUsherUrl, normalizeUrl, urlShape } from '../utils/url';
 import { handBack, hardFlush, switchRendition } from '../player/player';
 import { setBreakActive } from '../player/observer';
 import { trace, digestPlaylist, captureBody, recordBreakSummary } from '../trace';
@@ -86,6 +86,10 @@ export function liveNumbered(text: string): string {
 
 let nextBreakId = 1;
 
+function renditionName(v: StreamVariant): string {
+  return `${v.resolution} ${videoCodec(v.codecs)}`;
+}
+
 export class M3U8Processor {
   // The ad segments of a break served without a backup, which the hooks answer with empty video.
   readonly adSegments = new Set<string>();
@@ -125,7 +129,7 @@ export class M3U8Processor {
     const masterUrl = normalizeUrl(url);
     const channelName = channelFromUsherUrl(masterUrl);
     if (!channelName) {
-      trace('master', 'unmatched', { url: urlTail(masterUrl) });
+      trace('master', 'unmatched', { url: urlShape(masterUrl) });
       return text;
     }
 
@@ -167,7 +171,7 @@ export class M3U8Processor {
     const mediaUrl = normalizeUrl(url);
     const info = this.streamByUrl.get(mediaUrl);
     if (!info) {
-      trace('poll', 'passthrough', { url: urlTail(mediaUrl) });
+      trace('poll', 'passthrough', { url: urlShape(mediaUrl) });
       return text;
     }
     info.lastSeenAt = Date.now();
@@ -185,9 +189,9 @@ export class M3U8Processor {
     const inAd = text.includes(AD_SIGNIFIER);
 
     const opened = inAd && !info.break;
-    if (opened) this.openBreak(info, variant, url, text);
+    if (opened) this.openBreak(info, variant, text);
 
-    if (!inAd && info.break) this.closeBreak(info, url, text);
+    if (!inAd && info.break) this.closeBreak(info, variant, text);
 
     let served = text;
     let backupHit = false;
@@ -217,7 +221,7 @@ export class M3U8Processor {
     }
 
     served = liveNumbered(served);
-    if (opened && backupHit) captureBody('break-served', urlTail(url, 32), served);
+    if (opened && backupHit) captureBody('break-served', renditionName(variant), served);
 
     const bt = info.break;
     if (bt) {
@@ -228,7 +232,7 @@ export class M3U8Processor {
     trace('poll', 'decision', {
       breakId: bt?.id ?? null,
       channel: info.channelName,
-      url: urlTail(url, 32),
+      rendition: renditionName(variant),
       codec: variant.codecs,
       digest: rawDigest,
       inAd,
@@ -240,7 +244,7 @@ export class M3U8Processor {
     return served;
   }
 
-  private openBreak(info: ChannelStreamInfo, variant: StreamVariant, url: string, raw: string): void {
+  private openBreak(info: ChannelStreamInfo, variant: StreamVariant, raw: string): void {
     const codec = variant.codecs;
     info.break = {
       id: nextBreakId++,
@@ -253,11 +257,11 @@ export class M3U8Processor {
       backupMisses: 0,
     };
     trace('break', 'start', { breakId: info.break.id, channel: info.channelName, codec });
-    captureBody('break-open', urlTail(url, 32), raw);
+    captureBody('break-open', renditionName(variant), raw);
     setBreakActive(true);
   }
 
-  private closeBreak(info: ChannelStreamInfo, url: string, raw: string): void {
+  private closeBreak(info: ChannelStreamInfo, variant: StreamVariant, raw: string): void {
     const { id, startedAt, handBack: rendition, ...counts } = info.break!;
     info.break = null;
     this.backupManager.endBreak(info.channelName);
@@ -279,7 +283,7 @@ export class M3U8Processor {
     };
     trace('break', 'end', summary);
     recordBreakSummary(summary);
-    captureBody('break-close', urlTail(url, 32), raw);
+    captureBody('break-close', renditionName(variant), raw);
     setBreakActive(false);
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { channelFromUsherUrl, classifyHlsUrl } from '../../src/utils/url';
+import { channelFromUsherUrl, classifyHlsUrl, urlShape } from '../../src/utils/url';
 
 describe('classifyHlsUrl', () => {
   it('a usher channel URL is a master', () => {
@@ -44,5 +44,23 @@ describe('channelFromUsherUrl', () => {
 
   it('is null for anything else', () => {
     expect(channelFromUsherUrl('https://video-edge.example.com/1080p60.m3u8')).toBeNull();
+  });
+});
+
+describe('urlShape', () => {
+  it('keeps the host and file type, and drops the signed path and query', () => {
+    expect(
+      urlShape(
+        'https://e8d2b6296c88.j.cloudfront.hls.ttvnw.net/v1/segment/CpIDlHMwmZZ3Qx-dC0yMK0Q.mp4?dna=CoQBHeVh',
+      ),
+    ).toBe('e8d2b6296c88.j.cloudfront.hls.ttvnw.net/….mp4');
+    expect(urlShape('https://usher.ttvnw.net/api/v2/channel/hls/einz.m3u8?sig=abc&token=xyz')).toBe(
+      'usher.ttvnw.net/….m3u8',
+    );
+  });
+
+  it('reduces anything without a host to an ellipsis', () => {
+    expect(urlShape('blob:https://www.twitch.tv/6f3c1e')).toBe('…');
+    expect(urlShape('seg.ts')).toBe('…');
   });
 });

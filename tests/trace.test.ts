@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { trace, traceEntries, clearTrace, digestPlaylist } from '../src/trace';
+import { trace, traceEntries, clearTrace, digestPlaylist, scrubPlaylist } from '../src/trace';
 
 describe('trace ring buffer', () => {
   beforeEach(() => clearTrace());
@@ -82,5 +82,32 @@ describe('digestPlaylist', () => {
       discontinuities: 1,
       mediaSeq: 1234,
     });
+  });
+});
+
+describe('scrubPlaylist', () => {
+  const raw = [
+    '#EXTM3U',
+    '#EXT-X-DATERANGE:ID="playlist-session-1792509673",CLASS="twitch-session",X-TV-TWITCH-SESSIONID="4269315076774651013"',
+    '#EXT-X-DATERANGE:ID="source-1",CLASS="twitch-stream-source",X-TV-TWITCH-STREAM-SOURCE="live"',
+    '#EXT-X-DATERANGE:ID="trigger-1",CLASS="twitch-trigger",X-TV-TWITCH-TRIGGER-URL="https://use22.playlist.ttvnw.net/trigger/CvkHyYQX7Inst"',
+    '#EXT-X-MAP:URI="https://e8d2.hls.ttvnw.net/v1/segment/Cv8CGAATwmh.mp4"',
+    '#EXTINF:2.000,live',
+    'https://e8d2.hls.ttvnw.net/v1/segment/CpIDlHMwmZZ3Qx.mp4?dna=CoQBHeVh',
+  ].join('\n');
+  const out = scrubPlaylist(raw);
+
+  it('cuts session ids, tokens, and signed URLs', () => {
+    expect(out).not.toContain('4269315076774651013');
+    expect(out).not.toContain('CvkHyYQX7Inst');
+    expect(out).not.toContain('CpIDlHMwmZZ3Qx');
+    expect(out).not.toContain('dna=');
+  });
+
+  it('keeps the structure a log is read for: tags, classes, short values, and file types', () => {
+    expect(out).toContain('CLASS="twitch-session"');
+    expect(out).toContain('X-TV-TWITCH-STREAM-SOURCE="live"');
+    expect(out).toContain('#EXT-X-MAP:URI="e8d2.hls.ttvnw.net/….mp4"');
+    expect(out).toContain('#EXTINF:2.000,live\ne8d2.hls.ttvnw.net/….mp4');
   });
 });

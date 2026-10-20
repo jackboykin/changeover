@@ -27,7 +27,7 @@ To install the script, build it and add it to a userscript manager:
 
 If an ad plays or the stream stalls, press Ctrl+Shift+L in that tab right away. The tab downloads a
 log of what the script did, and you can attach it to an issue. The log includes the channels you
-watched, your browser version, and a few raw Twitch playlists with their session IDs.
+watched and your browser version.
 
 ## How it works
 

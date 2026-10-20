@@ -1,5 +1,6 @@
 import { version } from '../package.json';
 import { AD_SIGNIFIER } from './utils/constants';
+import { urlShape } from './utils/url';
 
 interface TraceEntry {
   seq: number;
@@ -13,7 +14,7 @@ interface BodyCapture {
   seq: number;
   t: number;
   kind: string;
-  url: string;
+  rendition: string;
   body: string;
 }
 
@@ -53,8 +54,17 @@ export function clearTrace(): void {
   bodies.length = 0;
 }
 
-export function captureBody(kind: string, url: string, body: string): void {
-  pushCapped(bodies, { seq: seq++, t: Date.now(), kind, url, body }, BODIES_MAX);
+// A raw playlist names the viewing session in its URLs and its long X-TV-TWITCH values (session
+// and ad ids, tokens). Those are cut before the playlist is kept; short values such as the stream
+// source and pod position stay.
+export function scrubPlaylist(playlist: string): string {
+  return playlist
+    .replace(/https?:\/\/[^\s"]+/g, (url) => urlShape(url))
+    .replace(/(X-TV-TWITCH-[\w-]+=")[^"]{12,}"/g, '$1…"');
+}
+
+export function captureBody(kind: string, rendition: string, body: string): void {
+  pushCapped(bodies, { seq: seq++, t: Date.now(), kind, rendition, body: scrubPlaylist(body) }, BODIES_MAX);
 }
 
 export function digestPlaylist(text: string) {
