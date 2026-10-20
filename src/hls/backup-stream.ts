@@ -102,13 +102,19 @@ export class BackupStreamManager {
       trace('backup', 'backoff-skip', { channel: channelName });
       return null;
     }
+    return this.acquire(target, variant);
+  }
 
+  // Holds the channel's slot while the flavors race, so a release or break end in the meantime
+  // discards the result.
+  private async acquire(target: UsherTarget, variant: StreamVariant): Promise<string | null> {
+    const { channelName } = target;
     const pending: Pending = { pending: true };
     this.sessions.set(channelName, pending);
     const startedAt = Date.now();
     let acquired: Acquired | null = null;
     try {
-      acquired = await this.acquireSession(target, variant);
+      acquired = await this.raceFlavors(target, variant);
     } catch (err) {
       trace('backup', 'acquire-error', { channel: channelName, err: String(err) });
     }
@@ -208,7 +214,7 @@ export class BackupStreamManager {
     return null;
   }
 
-  private async acquireSession(target: UsherTarget, variant: StreamVariant): Promise<Acquired | null> {
+  private async raceFlavors(target: UsherTarget, variant: StreamVariant): Promise<Acquired | null> {
     // Every chain starts at once and is judged in priority order, so the wait is the slowest chain
     // ahead of the winner rather than their sum. A losing chain is never awaited: tryFlavor must
     // not reject.
