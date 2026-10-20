@@ -20,10 +20,6 @@ let stopSamplingAt = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let last: { v: HTMLVideoElement; t: number; still: number } | null = null;
 
-function getVideo(): HTMLVideoElement | null {
-  return typeof document !== 'undefined' ? document.querySelector('video') : null;
-}
-
 function bufferAhead(v: HTMLVideoElement): number {
   const b = v.buffered;
   return b.length > 0 ? b.end(b.length - 1) - v.currentTime : 0;
@@ -48,10 +44,6 @@ export function gapJumpTarget(ranges: ReadonlyArray<readonly [number, number]>, 
   return forward === null ? null : Math.min(forward[0] + GAP_MIN_S, forward[1]);
 }
 
-export function isStuck(paused: boolean, ended: boolean, ahead: number): boolean {
-  return paused && !ended && ahead < STUCK_BUFFER_S;
-}
-
 function videoState(v: HTMLVideoElement | null): Record<string, unknown> {
   if (!v) return { video: false };
   return {
@@ -69,7 +61,7 @@ function tick(): void {
     timer = null;
     return;
   }
-  sample(getVideo());
+  sample(document.querySelector('video'));
 }
 
 export function sample(v: HTMLVideoElement | null): void {
@@ -94,10 +86,6 @@ export function setBreakActive(active: boolean): void {
   } else {
     stopSamplingAt = Date.now() + BREAK_TRAILING_MS;
   }
-}
-
-export function chooseRecovery(taken: number): 'play' | 'ivs-flush' {
-  return taken >= 3 ? 'ivs-flush' : 'play';
 }
 
 let ladderTarget: HTMLVideoElement | null = null;
@@ -130,14 +118,14 @@ function recover(target: HTMLVideoElement, taken: number, looks: number, lastT: 
 }
 
 function step(target: HTMLVideoElement, taken: number, looks: number, lastT: number): void {
-  const v = getVideo();
-  if (!v || v !== target) {
+  const release = (): void => {
     if (ladderTarget === target) ladderTarget = null;
-    return;
-  }
+  };
+  const v = document.querySelector('video');
+  if (v !== target) return release();
   const finish = (ev: string, extra: Record<string, unknown> = {}): void => {
-    if (ev) trace('recover', ev, { taken, looks, ...extra, ...videoState(v) });
-    if (ladderTarget === target) ladderTarget = null;
+    trace('recover', ev, { taken, looks, ...extra, ...videoState(v) });
+    release();
   };
 
   if (looks >= RECOVERY_MAX_LOOKS) return finish('gave-up', { reason: 'looks' });
@@ -148,8 +136,9 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
     level = 0;
   }
 
-  if (!isStuck(v.paused, v.ended, bufferAhead(v))) {
-    // isStuck can't see a park before a buffer hole: unpaused, with buffer counted across the hole.
+  const stuck = v.paused && !v.ended && bufferAhead(v) < STUCK_BUFFER_S;
+  if (!stuck) {
+    // A park before a buffer hole looks unstuck: unpaused, with buffer counted across the hole.
     if (!v.paused && !v.ended && level < RECOVERY_MAX_ACTIONS && inSeamWindow()) {
       const jump = gapJumpTarget(rangesOf(v), v.currentTime);
       if (jump !== null) {
@@ -159,12 +148,12 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
         return;
       }
     }
-    return finish(level > 0 || taken > 0 ? 'settled' : '');
+    return taken > 0 ? finish('settled') : release();
   }
 
   if (level >= RECOVERY_MAX_ACTIONS) return finish('gave-up');
 
-  const action = chooseRecovery(level);
+  const action = level === RECOVERY_MAX_ACTIONS - 1 ? 'ivs-flush' : 'play';
   const at = v.currentTime;
   trace('recover', action, { taken: level, looks, action, ...videoState(v) });
 
@@ -179,32 +168,26 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
   recover(target, level + 1, looks + 1, at);
 }
 
+const STALL_EVENTS = ['waiting', 'stalled', 'error'] as const;
+
 export function installObserver(): void {
   let attached: HTMLVideoElement | null = null;
 
   const onStall = (e: Event): void => arm(e.target as HTMLVideoElement, e.type);
 
   const attach = (): void => {
-    const video = getVideo();
+    const video = document.querySelector('video');
     if (video === attached) return;
-    if (attached) {
-      attached.removeEventListener('waiting', onStall);
-      attached.removeEventListener('stalled', onStall);
-      attached.removeEventListener('error', onStall);
-    }
+    for (const type of STALL_EVENTS) attached?.removeEventListener(type, onStall);
     attached = video;
     if (!video) {
       trace('player', 'video-lost', {});
       return;
     }
-    video.addEventListener('waiting', onStall);
-    video.addEventListener('stalled', onStall);
-    video.addEventListener('error', onStall);
+    for (const type of STALL_EVENTS) video.addEventListener(type, onStall);
     trace('player', 'video-found', {});
   };
 
   attach();
-  const observer = new MutationObserver(() => attach());
-  const target = document.querySelector('.persistent-player') ?? document.body;
-  if (target) observer.observe(target, { childList: true, subtree: true });
+  new MutationObserver(attach).observe(document.body, { childList: true, subtree: true });
 }
