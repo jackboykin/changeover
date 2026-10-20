@@ -37,8 +37,11 @@ player the first ad-free playlist. The web players carry source quality, and the
 the fallback at lower quality. If all three are mid-ad, the script serves the original playlist and
 answers each ad segment with empty video.
 
-After a break, the script restarts playback if it stops moving. When a break on an HEVC stream ends, the script reloads the
-player, which keeps audio in sync.
+A backup can arrive in another format than the stream: Twitch serves HEVC as fMP4 and AVC as
+MPEG-TS. The player can't follow that change inside one rendition, so the script switches the player
+to its own rendition in the backup's format for the break, and back after. If the player has no such
+rendition, the script reloads the player when the break ends, which keeps audio in sync. After any
+break, the script restarts playback if it stops moving.
 
 ## Development
 
