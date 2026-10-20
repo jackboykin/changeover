@@ -170,10 +170,12 @@ function step(target: HTMLVideoElement, taken: number, looks: number, lastT: num
 
 const STALL_EVENTS = ['waiting', 'stalled', 'error'] as const;
 
+function onStall(e: Event): void {
+  arm(e.target as HTMLVideoElement, e.type);
+}
+
 export function installObserver(): void {
   let attached: HTMLVideoElement | null = null;
-
-  const onStall = (e: Event): void => arm(e.target as HTMLVideoElement, e.type);
 
   const attach = (): void => {
     const video = document.querySelector('video');

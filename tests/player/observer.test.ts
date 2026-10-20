@@ -5,7 +5,7 @@ let ivsAvailable = true;
 const hardFlushMock = mock(() => Promise.resolve(ivsAvailable));
 
 // mock.module is process-global, so this keeps every export other test files import.
-mock.module('../../src/player/player', () => ({
+await mock.module('../../src/player/player', () => ({
   setFreshPathMint: () => {},
   hardFlush: hardFlushMock,
   switchRendition: () => null,
@@ -85,7 +85,9 @@ function makeVideo(over: Partial<FakeVideo> = {}): FakeVideo {
     readyState: 2,
     buffered: { length: 1, start: () => 0, end: () => 88.72 },
     play: mock(() => Promise.resolve()),
-    addEventListener: (type, fn) => (listeners[type] ??= []).push(fn),
+    addEventListener: (type, fn) => {
+      (listeners[type] ??= []).push(fn);
+    },
     removeEventListener: () => {},
     _listeners: listeners,
     dispatch(type) {
@@ -108,12 +110,11 @@ describe('stall recovery integration', () => {
       querySelectorAll: (sel: string) => (sel === 'video' ? [v] : []),
       body: {},
     };
-    (globalThis as unknown as { setTimeout: unknown }).setTimeout = ((fn: () => void) => {
+    (globalThis as unknown as { setTimeout: unknown }).setTimeout = (fn: () => void) => {
       fn();
       return 0;
-    }) as unknown as typeof setTimeout;
-    (globalThis as unknown as { setInterval: unknown }).setInterval = (() =>
-      0) as unknown as typeof setInterval;
+    };
+    (globalThis as unknown as { setInterval: unknown }).setInterval = () => 0;
     (globalThis as unknown as { MutationObserver: unknown }).MutationObserver = class {
       observe() {}
       disconnect() {}

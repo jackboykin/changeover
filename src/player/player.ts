@@ -35,7 +35,7 @@ function findIVSPlayer(): IVSPlayer | null {
   for (let i = 0; root.return && i < 100; i++) root = root.return;
 
   const stack: FiberNode[] = [root];
-  for (let visited = 0; stack.length && visited < 20_000; visited++) {
+  for (let visited = 0; stack.length > 0 && visited < 20_000; visited++) {
     const node = stack.pop()!;
     const player = ivsFromFiber(node);
     if (player) return player;

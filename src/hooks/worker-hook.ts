@@ -57,7 +57,7 @@ export function installWorkerHook(processor: M3U8Processor): void {
       const blobUrl = URL.createObjectURL(new Blob([modifiedSource], { type: 'application/javascript' }));
       super(blobUrl, options);
 
-      this.addEventListener('message', (e: MessageEvent) =>
+      this.addEventListener('message', (e: MessageEvent<WorkerMessage>) =>
         handleWorkerMessage(processor, e.data, this, blobUrl),
       );
     }

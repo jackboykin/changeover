@@ -49,10 +49,10 @@ describe('hardFlush', () => {
     ivsPlay.mockClear();
     setQuality.mockClear();
     setAutoQualityMode.mockClear();
-    (globalThis as unknown as { setTimeout: unknown }).setTimeout = ((fn: () => void) => {
+    (globalThis as unknown as { setTimeout: unknown }).setTimeout = (fn: () => void) => {
       fn();
       return 0;
-    }) as unknown as typeof setTimeout;
+    };
   });
 
   afterEach(() => {

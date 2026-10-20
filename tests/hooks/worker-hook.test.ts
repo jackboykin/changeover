@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import type { WorkerMessage } from '../../src/types';
 import { installWorkerHook } from '../../src/hooks/worker-hook';
 import type { M3U8Processor } from '../../src/hls/m3u8-processor';
 
@@ -46,7 +45,7 @@ describe('worker-hook integration', () => {
   };
 
   const originalWindow = g.window;
-  const originalXMLHttpRequest = globalThis.XMLHttpRequest;
+  const originalXMLHttpRequest = globalThis.XMLHttpRequest as typeof XMLHttpRequest | undefined;
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
 
@@ -97,7 +96,7 @@ describe('worker-hook integration', () => {
       writable: true,
     });
     Object.defineProperty(globalThis, 'XMLHttpRequest', {
-      value: FakeXMLHttpRequest as unknown as typeof XMLHttpRequest,
+      value: FakeXMLHttpRequest,
       configurable: true,
       writable: true,
     });
@@ -108,8 +107,8 @@ describe('worker-hook integration', () => {
     };
 
     installWorkerHook({
-      serve: async (_url: string, text: string, isMaster: boolean) =>
-        `${text}\n#${isMaster ? 'master' : 'media'}-processed`,
+      serve: (_url: string, text: string, isMaster: boolean) =>
+        Promise.resolve(`${text}\n#${isMaster ? 'master' : 'media'}-processed`),
       adSegments: new Set(['https://ads.example.com/ad.ts']),
     } as unknown as M3U8Processor);
   });
@@ -198,13 +197,13 @@ describe('worker-hook integration', () => {
   it('revokes the blob URL once the worker is ready', () => {
     const worker = new g.window!.Worker('https://player.twitch.tv/worker.js') as unknown as FakeWorker;
     expect(revokeObjectURLMock).not.toHaveBeenCalled();
-    worker.emit('message', { key: 'WorkerReady' } as WorkerMessage);
+    worker.emit('message', { key: 'WorkerReady' });
     expect(revokeObjectURLMock).toHaveBeenCalledWith(worker.url);
   });
 
   it('routes M3U8Request through processor and posts M3U8Response', async () => {
     const worker = new g.window!.Worker('https://static.twitch.tv/workers/site.js') as unknown as FakeWorker;
-    worker.emit('message', { key: 'WorkerReady' } as WorkerMessage);
+    worker.emit('message', { key: 'WorkerReady' });
 
     worker.emit('message', {
       key: 'M3U8Request',
@@ -212,9 +211,9 @@ describe('worker-hook integration', () => {
       url: 'https://video-edge.example.com/media.m3u8',
       text: '#EXTM3U',
       isMaster: false,
-    } as WorkerMessage);
+    });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Bun.sleep(0);
 
     expect(worker.postedMessages).toEqual([
       {

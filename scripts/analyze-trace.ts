@@ -20,7 +20,7 @@ const count = (cat: string, ev: string) => events.filter((e) => e.cat === cat &&
 
 function median(xs: number[]): string {
   if (xs.length === 0) return '—';
-  const s = [...xs].sort((a, b) => a - b);
+  const s = xs.toSorted((a, b) => a - b);
   return `${s[Math.floor(s.length / 2)]!}ms`;
 }
 
@@ -86,8 +86,7 @@ for (const start of events.filter((e) => e.cat === 'break' && e.ev === 'start'))
     const paused = ticks.filter((e) => e.data?.['paused'] === true).length;
     const blind = ticks.filter((e) => e.data?.['video'] === false).length;
     const positions = ticks.map((e) => num(e.data?.['t'])).filter((v): v is number => v !== null);
-    const advanced =
-      positions.length > 1 ? (positions[positions.length - 1]! - positions[0]!).toFixed(1) : '—';
+    const advanced = positions.length > 1 ? (positions.at(-1)! - positions[0]!).toFixed(1) : '—';
     console.log(
       `  sampler: ${ticks.length} ticks, ${paused} paused, ${blind} no-video, playhead advanced ${advanced}s`,
     );
@@ -175,8 +174,8 @@ if (real.length > 0) {
 
 const recoverEvents = events.filter((e) => e.cat === 'recover');
 if (recoverEvents.length > 0) {
-  const nonAction = ['settled', 'gave-up'];
-  console.log(`\nrecovery actions fired: ${recoverEvents.filter((e) => !nonAction.includes(e.ev)).length}`);
+  const nonAction = new Set(['settled', 'gave-up']);
+  console.log(`\nrecovery actions fired: ${recoverEvents.filter((e) => !nonAction.has(e.ev)).length}`);
   for (const ev of ['play', 'gap-jump', 'ivs-flush', 'settled', 'gave-up']) {
     const n = recoverEvents.filter((e) => e.ev === ev).length;
     if (n > 0) console.log(`  ${ev.padEnd(16)} ${n}`);

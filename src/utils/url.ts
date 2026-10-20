@@ -9,7 +9,7 @@ export function normalizeUrl(url: string): string {
 // A URL cut to its host and file type, which tells playlists and segments apart in a trace
 // without the signed path and query that name the viewing session.
 export function urlShape(url: string): string {
-  const m = /^\w+:\/\/([^/?#]+)[^?#]*?(\.\w+)?(?:[?#].*)?$/.exec(url);
+  const m = /^\w+:\/\/([^/?#]+)[^?#]*?(\.\w+)?(?:[?#].*)?$/u.exec(url);
   return m ? `${m[1]}/…${m[2] ?? ''}` : '…';
 }
 
@@ -19,7 +19,7 @@ export function classifyHlsUrl(url: string): { isHls: boolean; isMaster: boolean
   return { isHls, isMaster };
 }
 
-const USHER_CHANNEL = /\/channel\/hls\/([^/.]+)\.m3u8/;
+const USHER_CHANNEL = /\/channel\/hls\/([^/.]+)\.m3u8/u;
 
 export function channelFromUsherUrl(url: string): string | null {
   return USHER_CHANNEL.exec(url)?.[1] ?? null;

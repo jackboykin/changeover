@@ -3,7 +3,7 @@ import { getGQLHeaders, installFetchHook } from '../../src/hooks/fetch-hook';
 import type { M3U8Processor } from '../../src/hls/m3u8-processor';
 import { TWITCH_CLIENT_ID, GQL_URL } from '../../src/utils/constants';
 
-const processor = (serve: M3U8Processor['serve'] = async (_url, text) => text) =>
+const processor = (serve: M3U8Processor['serve'] = (_url, text) => Promise.resolve(text)) =>
   ({ adSegments: new Set(), serve }) as unknown as M3U8Processor;
 
 describe('installFetchHook integration', () => {
@@ -18,7 +18,7 @@ describe('installFetchHook integration', () => {
 
   beforeEach(() => {
     g.window = {
-      fetch: mock(async () => new Response('', { status: 200 })) as unknown as typeof fetch,
+      fetch: mock(() => Promise.resolve(new Response('', { status: 200 }))) as unknown as typeof fetch,
       location: { href: 'https://www.twitch.tv/test-channel' },
     };
   });
@@ -70,12 +70,12 @@ describe('installFetchHook integration', () => {
   });
 
   it('routes HLS playlist responses through processor in main-thread interception path', async () => {
-    const serve = mock(async (_url: string, _text: string, isMaster: boolean) =>
-      isMaster ? '#EXTM3U\n#master-processed' : '#EXTM3U\n#media-processed',
+    const serve = mock((_url: string, _text: string, isMaster: boolean) =>
+      Promise.resolve(isMaster ? '#EXTM3U\n#master-processed' : '#EXTM3U\n#media-processed'),
     );
 
-    g.window!.fetch = mock(
-      async () => new Response('#EXTM3U\n#original', { status: 200 }),
+    g.window!.fetch = mock(() =>
+      Promise.resolve(new Response('#EXTM3U\n#original', { status: 200 })),
     ) as unknown as typeof fetch;
     installFetchHook(processor(serve));
 
@@ -122,8 +122,8 @@ describe('installFetchHook integration', () => {
   it('captureAccessTokenHash tolerates non-JSON body without throwing', async () => {
     installFetchHook(processor());
 
-    await expect(
-      g.window!.fetch(GQL_URL, { method: 'POST', body: 'not-valid-json{' }),
-    ).resolves.toBeDefined();
+    expect(await g.window!.fetch(GQL_URL, { method: 'POST', body: 'not-valid-json{' })).toBeInstanceOf(
+      Response,
+    );
   });
 });

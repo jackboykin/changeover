@@ -10,15 +10,15 @@
     "build": "bun run scripts/build.ts",
     "typecheck": "bun tsc --noEmit",
     "test": "bun test",
-    "lint": "eslint src tests scripts",
+    "lint": "oxlint src tests scripts",
     "format": "prettier --check src tests scripts",
     "format:write": "prettier --write src tests scripts"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "eslint": "^10.2.1",
+    "oxlint": "^1.89.0",
+    "oxlint-tsgolint": "^7.0.2004",
     "prettier": "^3.8.3",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.58.2"
+    "typescript": "^7.0.2"
   }
 }

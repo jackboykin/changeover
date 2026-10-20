@@ -8,11 +8,11 @@ export function headerInt(text: string, tag: string): number | null {
   const idx = text.indexOf(tag);
   const firstSegment = text.indexOf('#EXTINF');
   if (idx === -1 || (firstSegment !== -1 && idx > firstSegment)) return null;
-  const n = parseInt(text.substring(idx + tag.length, idx + tag.length + 20), 10);
+  const n = parseInt(text.slice(idx + tag.length, idx + tag.length + 20), 10);
   return Number.isNaN(n) ? null : n;
 }
 
-const AUDIO_CODEC = /^(mp4a|ac-3|ec-3|opus|flac)/;
+const AUDIO_CODEC = /^(mp4a|ac-3|ec-3|opus|flac)/u;
 
 // The video sample entry, such as avc1 or hev1.
 export function videoCodec(codecs: string): string {
@@ -32,7 +32,7 @@ export function mediaFormat(playlist: string, codecs: string): string {
   return `${fmp4 ? 'fmp4' : 'ts'}/${videoCodec(codecs)}`;
 }
 
-const ATTRIBUTE = /([A-Z0-9-]+)=(?:"([^"]*)"|([^,]*))/g;
+const ATTRIBUTE = /([A-Z0-9-]+)=(?:"([^"]*)"|([^,]*))/gu;
 
 export function parseAttributes(list: string): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -41,17 +41,17 @@ export function parseAttributes(list: string): Record<string, string> {
 }
 
 const STREAM_INF_TAG = '#EXT-X-STREAM-INF:';
-const RESOLUTION = /^(\d+)x(\d+)$/;
+const RESOLUTION = /^(\d+)x(\d+)$/u;
 
 // Video renditions only, with their URLs resolved against the master's.
 export function parseMasterPlaylist(text: string, masterUrl: string): StreamVariant[] {
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/u);
   const variants: StreamVariant[] = [];
   for (let i = 0; i < lines.length - 1; i++) {
     const line = lines[i]!;
     const uri = lines[i + 1]!;
     if (!line.startsWith(STREAM_INF_TAG) || !uri.includes('.m3u8')) continue;
-    const attrs = parseAttributes(line.substring(STREAM_INF_TAG.length));
+    const attrs = parseAttributes(line.slice(STREAM_INF_TAG.length));
     const size = RESOLUTION.exec(attrs['RESOLUTION'] ?? '');
     if (!size) continue;
     variants.push({

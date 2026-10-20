@@ -45,7 +45,7 @@ export function trace(cat: string, ev: string, data?: Record<string, unknown>): 
 }
 
 export function traceEntries(): TraceEntry[] {
-  return [...frequent, ...rare].sort((a, b) => a.seq - b.seq);
+  return frequent.concat(rare).toSorted((a, b) => a.seq - b.seq);
 }
 
 export function clearTrace(): void {
@@ -59,8 +59,8 @@ export function clearTrace(): void {
 // source and pod position stay.
 export function scrubPlaylist(playlist: string): string {
   return playlist
-    .replace(/https?:\/\/[^\s"]+/g, (url) => urlShape(url))
-    .replace(/(X-TV-TWITCH-[\w-]+=")[^"]{12,}"/g, '$1…"');
+    .replaceAll(/https?:\/\/[^\s"]+/gu, (url) => urlShape(url))
+    .replaceAll(/(X-TV-TWITCH-[\w-]+=")[^"]{12,}"/gu, '$1…"');
 }
 
 export function captureBody(kind: string, rendition: string, body: string): void {
@@ -94,7 +94,7 @@ export function digestPlaylist(text: string) {
     } else if (line.startsWith('#EXT-X-DISCONTINUITY')) {
       digest.discontinuities++;
     } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
-      const n = parseInt(line.substring('#EXT-X-MEDIA-SEQUENCE:'.length), 10);
+      const n = parseInt(line.slice('#EXT-X-MEDIA-SEQUENCE:'.length), 10);
       if (!Number.isNaN(n)) digest.mediaSeq = n;
     }
   }
@@ -137,7 +137,7 @@ function downloadTrace(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `changeover-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.download = `changeover-trace-${new Date().toISOString().replaceAll(/[:.]/gu, '-')}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

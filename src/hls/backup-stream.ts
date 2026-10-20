@@ -275,6 +275,7 @@ export class BackupStreamManager {
     // not reject.
     const chains = BACKUP_FLAVORS.map((flavor) => this.tryFlavor(target, variant, flavor));
     for (const chain of chains) {
+      // oxlint-disable-next-line no-await-in-loop
       const got = await chain;
       if (!got) continue;
       if (got.stitched) {

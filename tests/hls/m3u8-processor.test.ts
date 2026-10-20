@@ -7,7 +7,7 @@ let switchable = false;
 let handBacks = 0;
 const breakActiveCalls: boolean[] = [];
 
-mock.module('../../src/player/player', () => ({
+await mock.module('../../src/player/player', () => ({
   setFreshPathMint: () => {},
   hardFlush: () => {
     flushes++;
@@ -20,7 +20,7 @@ mock.module('../../src/player/player', () => ({
   handBack: () => handBacks++,
 }));
 
-mock.module('../../src/player/observer', () => ({
+await mock.module('../../src/player/observer', () => ({
   setBreakActive: (active: boolean) => breakActiveCalls.push(active),
   installObserver: () => {},
 }));
@@ -387,7 +387,7 @@ describe('markAdSegments', () => {
       'X-TV-TWITCH-AD-UNMUTE-URL="https://a.example/u",X-TV-TWITCH-AD-POD-LENGTH="1",' +
       'X-TV-TWITCH-AD-TRACKING-START="https://b.example/s?x=1",X-TV-TWITCH-AD-CREATIVE-VIEW="http://c.example/v",' +
       'X-TV-TWITCH-AD-ADVERIFICATIONS="eyJWZXJpZmljYXRpb24iOltdfQ=="';
-    const { text } = markAdSegments(AD.replace(/^#EXT-X-DATERANGE.*$/m, line), new Set<string>());
+    const { text } = markAdSegments(AD.replace(/^#EXT-X-DATERANGE.*$/mu, line), new Set<string>());
     expect(text).not.toContain('.example');
     expect(text).toContain('X-TV-TWITCH-AD-UNMUTE-URL="https://twitch.tv"');
     expect(text).toContain('X-TV-TWITCH-AD-TRACKING-START="https://twitch.tv"');

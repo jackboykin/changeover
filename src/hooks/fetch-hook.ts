@@ -80,15 +80,17 @@ function captureHeaders(raw: HeadersInit): void {
   }
 }
 
+type GQLBody = {
+  operationName?: unknown;
+  extensions?: { persistedQuery?: { sha256Hash?: unknown } };
+} | null;
+
 function captureAccessTokenHash(body: string): void {
   try {
-    const parsed = JSON.parse(body);
-    if (
-      parsed.operationName === 'PlaybackAccessToken' &&
-      typeof parsed.extensions?.persistedQuery?.sha256Hash === 'string'
-    ) {
-      if (gqlHeaders.accessTokenHash == null) trace('gql', 'header-captured', { field: 'accessTokenHash' });
-      gqlHeaders.accessTokenHash = parsed.extensions.persistedQuery.sha256Hash;
-    }
+    const parsed = JSON.parse(body) as GQLBody;
+    const hash = parsed?.extensions?.persistedQuery?.sha256Hash;
+    if (parsed?.operationName !== 'PlaybackAccessToken' || typeof hash !== 'string') return;
+    if (gqlHeaders.accessTokenHash == null) trace('gql', 'header-captured', { field: 'accessTokenHash' });
+    gqlHeaders.accessTokenHash = hash;
   } catch {}
 }

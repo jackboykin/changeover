@@ -187,7 +187,7 @@ describe('variant matching', () => {
     const net = fakeNet();
     await poll();
     const calls = net.calls();
-    expect(String(calls[calls.length - 1]![0])).toBe('https://backup-edge.example.com/1080p60.m3u8');
+    expect(String(calls.at(-1)![0])).toBe('https://backup-edge.example.com/1080p60.m3u8');
   });
 
   it('falls back to the closest resolution by area', async () => {
@@ -195,7 +195,7 @@ describe('variant matching', () => {
     const odd: StreamVariant = { ...variant, resolution: '1152x648', width: 1152, height: 648 };
     await mgr.poll(channel('streamer'), odd);
     const calls = net.calls();
-    expect(String(calls[calls.length - 1]![0])).toBe('https://backup-edge.example.com/720p30.m3u8');
+    expect(String(calls.at(-1)![0])).toBe('https://backup-edge.example.com/720p30.m3u8');
   });
 });
 
@@ -209,7 +209,7 @@ describe('regressions', () => {
 
     expect(acquires()).toBe(1);
     const calls = net.calls();
-    expect(String(calls[calls.length - 1]![0])).toBe('https://backup-edge.example.com/720p30.m3u8');
+    expect(String(calls.at(-1)![0])).toBe('https://backup-edge.example.com/720p30.m3u8');
   });
 
   it('a switch that picks the playlist already served costs nothing', async () => {
@@ -266,7 +266,7 @@ describe('flavor tiering (source quality first, android floor)', () => {
         const token = Response.json({
           data: { streamPlaybackAccessToken: { signature: 's', value: flavor } },
         });
-        return new Promise<Response>((r) => setTimeout(() => r(token), slowMs[flavor] ?? 0));
+        return Bun.sleep(slowMs[flavor] ?? 0).then(() => token);
       }
       if (url.includes('usher')) {
         const isWeb = url.includes('token=embed') || url.includes('token=popout');
@@ -323,11 +323,8 @@ describe('release during acquire', () => {
     use((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('gql')) {
-        return new Promise<Response>((r) =>
-          setTimeout(
-            () => r(Response.json({ data: { streamPlaybackAccessToken: { signature: 's', value: 't' } } })),
-            2,
-          ),
+        return Bun.sleep(2).then(() =>
+          Response.json({ data: { streamPlaybackAccessToken: { signature: 's', value: 't' } } }),
         );
       }
       if (url.includes('usher')) return Promise.resolve(new Response(BACKUP_MASTER));

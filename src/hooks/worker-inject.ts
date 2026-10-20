@@ -1,10 +1,14 @@
+import type { MainToWorkerMessage } from '../types';
 import { EMPTY_MP4_DATA_URI } from '../utils/constants';
 import { classifyHlsUrl, urlShape } from '../utils/url';
 
 // Runs in the worker from its source text, so it can only use its arguments.
 function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, shape: typeof urlShape): void {
   const ws = self as unknown as {
-    addEventListener(type: 'message', listener: (e: MessageEvent) => void): void;
+    addEventListener(
+      type: 'message',
+      listener: (e: MessageEvent<MainToWorkerMessage | undefined>) => void,
+    ): void;
     postMessage(data: unknown): void;
     fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   };
@@ -12,15 +16,13 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, shape: ty
   const pendingM3U8Requests = new Map<string, (text: string) => void>();
   let nextRequestId = 0;
 
-  ws.addEventListener('message', (e: MessageEvent) => {
-    const data = e.data;
+  ws.addEventListener('message', ({ data }) => {
     if (data?.key !== 'M3U8Response') return;
-    if (data.adUrls) adSegmentUrls = new Set(data.adUrls as string[]);
-    const id = data.id as string;
-    const pending = pendingM3U8Requests.get(id);
+    if (data.adUrls) adSegmentUrls = new Set(data.adUrls);
+    const pending = pendingM3U8Requests.get(data.id);
     if (pending) {
-      pendingM3U8Requests.delete(id);
-      pending(data.text as string);
+      pendingM3U8Requests.delete(data.id);
+      pending(data.text);
     }
   });
 
@@ -80,5 +82,5 @@ function workerMain(emptyMp4: string, classify: typeof classifyHlsUrl, shape: ty
 }
 
 export function buildWorkerInjectionCode(): string {
-  return `(${workerMain})(${JSON.stringify(EMPTY_MP4_DATA_URI)}, ${classifyHlsUrl}, ${urlShape});`;
+  return `(${workerMain.toString()})(${JSON.stringify(EMPTY_MP4_DATA_URI)}, ${classifyHlsUrl.toString()}, ${urlShape.toString()});`;
 }

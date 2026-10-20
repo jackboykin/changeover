@@ -21,21 +21,21 @@ const PREFETCH_TAG = '#EXT-X-TWITCH-PREFETCH:';
 const PRELOAD_HINT_TAG = '#EXT-X-PRELOAD-HINT:';
 const PART_TAG = '#EXT-X-PART:';
 
-const TRACKING_URL_RE = /(X-TV-TWITCH-AD-[A-Z0-9-]+=")https?:\/\/[^"]*/g;
+const TRACKING_URL_RE = /(X-TV-TWITCH-AD-[A-Z0-9-]+=")https?:\/\/[^"]*/gu;
 // Emptied rather than removed: an empty list makes the player skip verification setup.
-const VERIFICATIONS_RE = /(X-TV-TWITCH-AD-ADVERIFICATIONS=")[^"]*/;
+const VERIFICATIONS_RE = /(X-TV-TWITCH-AD-ADVERIFICATIONS=")[^"]*/u;
 
-const AD_CDN_URL = /\/adsquared\/|\/_404\/|\/processing/;
+const AD_CDN_URL = /\/adsquared\/|\/_404\/|\/processing/u;
 
 function uriOf(line: string, tag: string): string {
-  return parseAttributes(line.substring(tag.length))['URI'] ?? '';
+  return parseAttributes(line.slice(tag.length))['URI'] ?? '';
 }
 
 // Live segments are tagged ,live and never come from an ad CDN; everything else is an ad.
 // Low-latency hints are blanked, since the player fetches them before reading any #EXTINF.
 export function markAdSegments(text: string, adSegments: Set<string>): { text: string; marked: number } {
   const hasTracking = text.includes('X-TV-TWITCH-AD-');
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/u);
   const lastIdx = lines.length - 1;
   let marked = 0;
   let changed = hasTracking;
@@ -44,7 +44,7 @@ export function markAdSegments(text: string, adSegments: Set<string>): { text: s
     let line = lines[i]!;
 
     if (hasTracking && line.startsWith('#EXT-X-DATERANGE')) {
-      line = line.replace(TRACKING_URL_RE, '$1' + AD_REPLACEMENT_URL).replace(VERIFICATIONS_RE, '$1');
+      line = line.replaceAll(TRACKING_URL_RE, '$1' + AD_REPLACEMENT_URL).replace(VERIFICATIONS_RE, '$1');
       lines[i] = line;
     }
 
@@ -56,7 +56,7 @@ export function markAdSegments(text: string, adSegments: Set<string>): { text: s
       }
     } else if (line.startsWith(PREFETCH_TAG) || line.startsWith(PRELOAD_HINT_TAG)) {
       const hintUrl = line.startsWith(PREFETCH_TAG)
-        ? line.substring(PREFETCH_TAG.length).trim()
+        ? line.slice(PREFETCH_TAG.length).trim()
         : uriOf(line, PRELOAD_HINT_TAG);
       if (hintUrl) adSegments.add(hintUrl);
       lines[i] = '';
@@ -145,7 +145,7 @@ export class M3U8Processor {
       channelName,
       lastSeenAt: Date.now(),
       isUsherV2: masterUrl.includes('/api/v2/'),
-      usherParams: qIdx >= 0 ? masterUrl.substring(qIdx) : '',
+      usherParams: qIdx >= 0 ? masterUrl.slice(qIdx) : '',
       variants: {},
       // Kept across a master re-fetch (token refresh, our own flush), or a seamed break never flushes.
       break: prev?.break ?? null,

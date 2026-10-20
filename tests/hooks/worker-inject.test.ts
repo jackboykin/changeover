@@ -6,7 +6,7 @@ describe('Executed code behavior', () => {
     const messages: unknown[] = [];
     const messageListeners: ((e: { data: unknown }) => void)[] = [];
     const scope: Record<string, unknown> = {
-      self: null as unknown,
+      self: null,
       addEventListener: mock((type: string, listener: (e: { data: unknown }) => void) => {
         if (type === 'message') messageListeners.push(listener);
       }),
@@ -61,7 +61,7 @@ describe('Executed code behavior', () => {
     const hookedFetch = scope.fetch as typeof fetch;
     await hookedFetch(adUrl);
 
-    const lastFetchedUrl = fetchedUrls[fetchedUrls.length - 1];
+    const lastFetchedUrl = fetchedUrls.at(-1);
     expect(lastFetchedUrl).toContain('data:video/mp4;base64,');
   });
 
@@ -84,7 +84,7 @@ describe('Executed code behavior', () => {
 
     void (scope.fetch as typeof fetch)('https://video-edge.example.com/media.m3u8');
 
-    await new Promise((r) => setTimeout(r, 10));
+    await Bun.sleep(10);
 
     const m3u8Msg = messages.find((m) => (m as { key: string }).key === 'M3U8Request');
     expect(m3u8Msg).toBeDefined();
@@ -125,7 +125,7 @@ describe('Executed code behavior', () => {
     messages.length = 0;
     const req = new Request('https://video-edge.example.com/live.m3u8', { method: 'GET' });
     const fetchPromise = (scope.fetch as typeof fetch)(req);
-    await new Promise((r) => setTimeout(r, 10));
+    await Bun.sleep(10);
 
     const m3u8Msg = messages.find((m) => (m as { key?: string }).key === 'M3U8Request') as
       | { id: string }
