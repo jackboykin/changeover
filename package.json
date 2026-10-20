@@ -1,0 +1,25 @@
+{
+  "name": "twitch-ad-block",
+  "version": "3.0",
+  "description": "Blocks ads on Twitch.",
+  "author": "jackboykin",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/twitch-ad-block.user.ts --outdir dist --target browser && bun run scripts/add-header.ts",
+    "dev": "bun build src/twitch-ad-block.user.ts --outdir dist --target browser --watch",
+    "typecheck": "bun tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "eslint src tests scripts",
+    "format": "prettier --check src tests scripts",
+    "format:write": "prettier --write src tests scripts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^10.2.1",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2"
+  }
+}
