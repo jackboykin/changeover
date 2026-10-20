@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format
+      - run: bun run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: userscript
+          path: dist/changeover.user.js
+
+  # A push that raises the version publishes it. Any other push only runs the checks.
+  release:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: userscript
+      - name: Release the version if it is new
+        run: |
+          tag="v$(jq -r .version package.json)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released"
+          else
+            gh release create "$tag" changeover.user.js --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          fi

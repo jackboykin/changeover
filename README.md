@@ -70,13 +70,7 @@ bun run scripts/analyze-trace.ts TRACE_FILE
 
 `TRACE_FILE` is the path to the log.
 
-To publish a release, set `version` in `package.json`, commit, then push a matching tag. The
-release workflow tests and builds the script and attaches it to a GitHub release. Userscript managers
-update only when the version goes up.
-
-```sh
-git tag vVERSION
-git push origin vVERSION
-```
-
-`VERSION` is the new `version` from `package.json`.
+To publish a release, raise `version` in `package.json` and push the commit to `master`. The
+workflow tests and builds the script, then tags the commit and attaches the script to a GitHub
+release. A push that leaves the version alone only runs the checks. Userscript managers update only
+when the version goes up.
