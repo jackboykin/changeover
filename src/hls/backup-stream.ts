@@ -355,24 +355,18 @@ function parseLadder(masterM3u8: string, masterUrl: string): StreamVariant[] {
   return ladder;
 }
 
+// The rendition nearest the target: size first, then frame rate, then video codec, so a ladder
+// carrying both codecs at one size never hands over a seam it could avoid.
 function pickVariant(ladder: readonly StreamVariant[], target: StreamVariant): StreamVariant | null {
-  const targetArea = target.width * target.height;
-  let exact: StreamVariant | null = null;
-  let closest: StreamVariant | null = null;
-  let closestDiff = Infinity;
-
-  for (const v of ladder) {
-    if (v.resolution === target.resolution) {
-      if (v.frameRate === target.frameRate) return v;
-      exact ??= v;
-    }
-    const diff = Math.abs(v.width * v.height - targetArea);
-    if (diff < closestDiff) {
-      closest = v;
-      closestDiff = diff;
-    }
-  }
-  return exact ?? closest;
+  const area = target.width * target.height;
+  const codec = videoCodec(target.codecs);
+  const cost = (v: StreamVariant): number =>
+    Math.abs(v.width * v.height - area) * 4 +
+    (v.frameRate === target.frameRate ? 0 : 2) +
+    (videoCodec(v.codecs) === codec ? 0 : 1);
+  let best: StreamVariant | null = null;
+  for (const v of ladder) if (!best || cost(v) < cost(best)) best = v;
+  return best;
 }
 
 function traceMatch(target: StreamVariant, chosen: StreamVariant, ladder: readonly StreamVariant[]): void {

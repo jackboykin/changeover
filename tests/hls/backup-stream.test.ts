@@ -420,3 +420,23 @@ describe('failure handling', () => {
     expect(await mgr.poll(channel('streamer'), variant)).toBeNull();
   });
 });
+
+describe('rendition choice', () => {
+  const DUAL = [
+    '#EXTM3U',
+    '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A"',
+    'https://backup-edge.example.com/1080p60.m3u8',
+    '#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="hev1.1.6.L150"',
+    'https://backup-edge.example.com/1080p60_hevc.m3u8',
+  ].join('\n');
+
+  it('keeps the requested video codec when a ladder carries both at one size', async () => {
+    fakeNet(DUAL);
+    await mgr.poll(channel('streamer'), { ...variant, codecs: 'hev1.1.6.L150,mp4a.40.2' });
+    expect(mgr.servedCodecs('streamer')).toBe('hev1.1.6.L150');
+
+    mgr.release('streamer');
+    await mgr.poll(channel('streamer'), variant);
+    expect(mgr.servedCodecs('streamer')).toBe('avc1.64002A');
+  });
+});
