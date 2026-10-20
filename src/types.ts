@@ -59,7 +59,6 @@ export interface IVSQuality {
   codecs?: string;
   width?: number;
   height?: number;
-  [key: string]: unknown;
 }
 
 export interface IVSPlayer {
