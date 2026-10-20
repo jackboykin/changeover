@@ -137,7 +137,9 @@ function downloadTrace(): void {
   a.href = url;
   a.download = `changeover-trace-${new Date().toISOString().replaceAll(/[:.]/gu, '-')}.json`;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 10_000);
 }
 
 export function installTraceExport(): void {

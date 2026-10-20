@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { trace, traceEntries, clearTrace, digestPlaylist, scrubPlaylist } from '../src/trace';
 
 describe('trace ring buffer', () => {
-  beforeEach(() => clearTrace());
+  beforeEach(clearTrace);
 
   it('records entries in order with monotonic seq', () => {
     trace('a', 'one', { x: 1 });
@@ -17,7 +17,8 @@ describe('trace ring buffer', () => {
   });
 
   it('evicts oldest-first once full and keeps order across the wrap', () => {
-    const MAX = 700; // FREQUENT_MAX in src/trace.ts
+    // FREQUENT_MAX in src/trace.ts.
+    const MAX = 700;
     for (let i = 0; i < MAX + 5; i++) trace('poll', 'decision', { i });
     const entries = traceEntries();
     expect(entries).toHaveLength(MAX);
@@ -30,7 +31,7 @@ describe('trace ring buffer', () => {
 });
 
 describe('trace ring tiers', () => {
-  beforeEach(() => clearTrace());
+  beforeEach(clearTrace);
 
   it('a poll flood cannot evict rare events', () => {
     trace('break', 'start', { breakId: 1 });

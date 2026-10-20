@@ -93,8 +93,10 @@ export function setFreshPathMint(mint: (channelName: string) => Promise<string |
 }
 
 const FLUSH_VERIFY_POLL_MS = 500;
-const FLUSH_DEADLINE_MS = 12_000; // a warm flush is ready in ~4s, a cold one in ~7.2s
-const FLUSH_READY_RS = 3; // HAVE_FUTURE_DATA
+// A warm flush is ready in ~4s, a cold one in ~7.2s.
+const FLUSH_DEADLINE_MS = 12_000;
+// HAVE_FUTURE_DATA.
+const FLUSH_READY_RS = 3;
 
 function snapshotQuality(ivs: IVSPlayer): QualitySnapshot {
   try {

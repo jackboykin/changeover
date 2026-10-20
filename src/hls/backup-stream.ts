@@ -31,7 +31,8 @@ interface Backoff {
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 30_000;
 
-const REFRESH_MS = 1000; // half the player's ~2s reload
+// Half the player's ~2s reload.
+const REFRESH_MS = 1000;
 const STALE_MS = 2500;
 const POLL_IDLE_MS = 6000;
 
@@ -170,11 +171,13 @@ export class BackupStreamManager {
   private startRefresh(channelName: string, session: Session): void {
     if (session.timer !== null) return;
     const timer = setInterval(() => {
-      if (this.sessions.get(channelName) !== session || Date.now() - session.lastPollAt > POLL_IDLE_MS)
-        return this.stopRefresh(session);
-      void this.fetchMedia(channelName, session);
+      const wanted =
+        this.sessions.get(channelName) === session && Date.now() - session.lastPollAt <= POLL_IDLE_MS;
+      if (wanted) void this.fetchMedia(channelName, session);
+      else this.stopRefresh(session);
     }, REFRESH_MS);
-    (timer as { unref?: () => void }).unref?.(); // so it never holds a test open
+    // So it never holds a test open.
+    (timer as { unref?: () => void }).unref?.();
     session.timer = timer;
   }
 

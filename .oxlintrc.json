@@ -20,10 +20,7 @@
     ],
     "eslint/require-await": "off",
     "typescript/prefer-readonly-parameter-types": "off",
-    "max-lines": "off",
-    "max-lines-per-function": "off",
     "max-classes-per-file": "off",
-    "no-inline-comments": "off",
     "unicorn/require-post-message-target-origin": "off",
     "typescript/no-unsafe-type-assertion": "off",
     "typescript/strict-boolean-expressions": [
@@ -32,8 +29,20 @@
         "allowNullableString": true
       }
     ],
-    "typescript/no-confusing-void-expression": "off",
-    "unicorn/prefer-number-coercion": "off"
+    "max-lines": [
+      "error",
+      {
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ],
+    "max-lines-per-function": [
+      "error",
+      {
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ]
   },
   "overrides": [
     {
@@ -50,7 +59,9 @@
         "no-await-in-loop": "off",
         "typescript/no-base-to-string": "off",
         "typescript/unbound-method": "off",
-        "unicorn/consistent-function-scoping": "off"
+        "unicorn/consistent-function-scoping": "off",
+        "max-lines": "off",
+        "max-lines-per-function": "off"
       }
     },
     {
